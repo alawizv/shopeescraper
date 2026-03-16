@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shopee Product Scraper</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <header class="header">
+      <h1>🛍️ Shopee Scraper</h1>
+      <div id="status-badge" class="status-badge idle">
+        <span class="status-dot"></span>
+        <span id="status-text">Menunggu...</span>
+      </div>
+    </header>
+
+    <!-- Pesan jika bukan halaman produk -->
+    <div id="not-product-page" class="message-box warning d-none">
+      <p>⚠️ Buka halaman produk Shopee terlebih dahulu.</p>
+      <p class="hint">Contoh: shopee.co.id/nama-produk-i.123456.789012</p>
+    </div>
+
+    <!-- Pesan error -->
+    <div id="error-message" class="message-box error d-none">
+      <p id="error-text"></p>
+    </div>
+
+    <!-- Konten utama -->
+    <div id="main-content" class="d-none">
+
+      <!-- Tombol aksi -->
+      <div class="action-bar">
+        <div style="display: flex; gap: 8px;">
+          <button id="btn-scrape" class="btn btn-primary" style="flex: 1;">
+            🔄 Scrape Data
+          </button>
+          <button id="btn-stop" class="btn" style="flex: 1; display: none; background-color: #ff4d4f; border-color: #ff4d4f; color: white;">
+            🛑 Stop
+          </button>
+        </div>
+        <button id="btn-fetch-extra" class="btn" style="width: 100%; margin-top: 8px; background-color: #f1f8ff; border: 1px solid #1890ff; color: #1890ff;">
+          ⚡ Muat Info Terjual & Toko
+        </button>
+      </div>
+
+      <!-- Info Produk -->
+      <section class="section">
+        <h2 class="section-title">📦 Info Produk</h2>
+        <div class="product-info">
+          <div class="info-row">
+            <span class="info-label">Nama:</span>
+            <span id="product-name" class="info-value product-name">-</span>
+          </div>
+          <div class="info-grid">
+            <div class="info-card">
+              <div class="info-card-label">Harga</div>
+              <div id="product-price" class="info-card-value">-</div>
+            </div>
+            <div class="info-card">
+              <div class="info-card-label">Rating</div>
+              <div id="product-rating" class="info-card-value">-</div>
+            </div>
+            <div class="info-card">
+              <div class="info-card-label">Terjual</div>
+              <div id="product-sold" class="info-card-value">-</div>
+            </div>
+            <div class="info-card">
+              <div class="info-card-label">Ulasan</div>
+              <div id="product-reviews" class="info-card-value">-</div>
+            </div>
+          </div>
+        </div>
+      </section>
+      </section>
+
+      <!-- Sampel Review -->
+      <section class="section" id="review-sample-section">
+        <h2 class="section-title">📋 Sampel Review</h2>
+        <div id="reviewSampleWrap" class="muted">Belum ada ulasan yang ter-scrape</div>
+        <div id="reviewSampleTableWrap" style="display:none;">
+          <table class="data-table">
+            <tbody>
+              <tr>
+                <td>Ulasan Terbaca (Unik)</td>
+                <td id="sample-scraped" style="text-align: right; font-weight: 600;">0</td>
+              </tr>
+              <tr>
+                <td>Total Ulasan (Shopee)</td>
+                <td id="sample-total" style="text-align: right; font-weight: 600;">0</td>
+              </tr>
+              <tr>
+                <td>Cakupan Sampel</td>
+                <td id="sample-coverage" style="text-align: right; font-weight: 600;">0%</td>
+              </tr>
+              <tr>
+                <td>Varian Unik Ditemukan</td>
+                <td id="sample-variants" style="text-align: right; font-weight: 600;">0</td>
+              </tr>
+            </tbody>
+          </table>
+          <div id="sample-note" style="font-size:9.5px; color:#888; font-style:italic; margin-top:6px; padding:4px; border-radius:4px; background:#f9f9f9; text-align:center;">
+          </div>
+        </div>
+      </section>
+
+      <!-- Varian -->
+      <section class="section">
+        <h2 class="section-title">
+          🎨 Varian
+          <span id="variant-count" class="badge">0</span>
+        </h2>
+        <div id="variant-container">
+          <p class="empty-text" id="no-variants">Tidak ada data varian</p>
+          
+          <!-- V1 Style Tier Summaries (Persentase Per Opsi) -->
+          <div id="tierSummariesWrap" style="margin-bottom: 15px; display: none;"></div>
+
+          <div id="variant-table-wrapper" class="d-none">
+            <table class="data-table" id="variant-table">
+              <thead>
+                <tr>
+                  <th>Tier 1</th>
+                  <th>Tier 2</th>
+                  <th>% Terjual</th>
+                  <th>Harga</th>
+                </tr>
+              </thead>
+              <tbody id="variant-tbody">
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Terjual/Bulan -->
+      <section class="section" id="monthly-sales-section">
+        <h2 class="section-title">📈 Terjual / Bulan</h2>
+        <div id="monthlySalesWrap">
+          <div class="info-grid monthly-sales-grid">
+            <div class="info-card monthly-sales-card">
+              <div class="info-card-label">Penjualan Bulanan</div>
+              <div id="monthly-sold-value" class="info-card-value monthly-sold-value">-</div>
+              <div id="monthly-sold-source" class="data-source-badge">Belum tersedia</div>
+            </div>
+          </div>
+          <div class="data-source-note" id="monthly-sold-note">
+            <strong>ℹ️ Cara mendapatkan data ini:</strong>
+            <ul>
+              <li><b>Prioritas 1 — PDP API:</b> Diambil dari field <code>sold</code> di response API halaman produk (<code>/api/v4/pdp/get</code>). Ini adalah data riil bulanan yang ditampilkan Shopee.</li>
+              <li><b>Prioritas 2 — Search API:</b> Dari response pencarian Shopee (<code>/api/v4/search/search_items</code>) saat user browsing. Field <code>sold</code> di sini juga menunjukkan penjualan bulanan.</li>
+              <li><b>Prioritas 3 — DOM Scraping:</b> Diekstrak dari teks "X Terjual / Bulan" yang terlihat di halaman via regex.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Info Toko -->
+      <section class="section" id="shop-info-section">
+        <h2 class="section-title">🏪 Info Toko</h2>
+        <div id="shopInfoWrap">
+          <p class="empty-text" id="no-shop-data">Data toko belum tersedia. Klik "Scrape Data" untuk mengambil.</p>
+          <div id="shop-info-content" class="d-none">
+            <table class="data-table" id="shop-info-table">
+              <tbody id="shop-info-tbody">
+              </tbody>
+            </table>
+            <div class="data-source-note" id="shop-data-note">
+              <strong>ℹ️ Cara mendapatkan data ini:</strong>
+              <ul>
+                <li><b>API Intercept:</b> Disadap dari response API toko (<code>/api/v4/shop/get_shop_detail</code>) yang dipanggil Shopee saat halaman dimuat.</li>
+                <li><b>Direct Fetch:</b> Jika intercept gagal, extension langsung memanggil API toko menggunakan <code>shop_id</code> yang diambil dari URL produk.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Export -->
+      <section class="section export-section">
+        <h2 class="section-title">📤 Export Data</h2>
+        <div class="export-buttons">
+          <button id="btn-export-json" class="btn btn-export">
+            📄 JSON
+          </button>
+          <button id="btn-export-csv" class="btn btn-export">
+            📊 CSV
+          </button>
+          <button id="btn-export-sheets" class="btn btn-export btn-sheets">
+            📗 Google Sheets
+          </button>
+        </div>
+        <p id="export-status" class="export-status d-none"></p>
+      </section>
+
+    </div>
+
+    <!-- Loading overlay -->
+    <div id="loading-overlay" class="loading-overlay d-none">
+      <div class="spinner"></div>
+      <p id="loading-text">Memuat data...</p>
+    </div>
+
+  </div>
+
+  <!-- Import utility scripts -->
+  <script src="../utils/parser.js"></script>
+  <script src="../utils/exporter.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,55 @@
+{
+  "manifest_version": 3,
+  "name": "Shopee Product Scraper",
+  "version": "1.0.0",
+  "description": "Scrape data produk, varian, dan review negatif dari halaman produk Shopee Indonesia.",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting",
+    "identity"
+  ],
+  "host_permissions": [
+    "https://*.shopee.co.id/*"
+  ],
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.shopee.co.id/*"],
+      "js": ["content/injector.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://*.shopee.co.id/*"],
+      "js": ["utils/parser.js", "content/panel.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "oauth2": {
+    "client_id": "GANTI_DENGAN_CLIENT_ID_GOOGLE_ANDA.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/spreadsheets"
+    ]
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["content/interceptor.js"],
+      "matches": ["https://*.shopee.co.id/*"]
+    }
+  ]
+}
