@@ -37,6 +37,9 @@ function buildCSV(output) {
   csv += `Total Terjual,${output.product?.total_sold || 0}\n`;
   csv += `Jumlah Ulasan,${output.product?.review_count || 0}\n`;
   csv += `Terjual / Bulan (API),${output.monthly_sold?.value || 0}\n`;
+  csv += `Omset/Bulan (Quick),${output.omset?.quick_value || 0}\n`;
+  csv += `Omset 30 Hari (Detail),${output.omset?.detail_value || 0}\n`;
+  csv += `Faktor Koreksi,${output.omset?.correction_factor || 0}\n`;
   csv += `URL,"${(output.url || '').replace(/"/g, '""')}"\n`;
   csv += `Waktu Scraping,"${output.scraped_at || ''}"\n\n`;
 
@@ -392,6 +395,30 @@ function createPanel() {
           </ul>
         </div>
 
+        <!-- Estimasi Omset -->
+        <div class="section-title"><span>💰 Estimasi Omset</span></div>
+        <div class="grid">
+          <div class="card monthly-sales-card">
+            <div class="k">Omset / Bulan (Quick) 💨</div>
+            <div class="v" id="omsetQuick">—</div>
+            <div style="font-size:9px; color:#888; margin-top:2px;" id="omsetQuickNote"></div>
+          </div>
+        </div>
+        <div class="grid" style="margin-top:0;">
+          <div class="card monthly-sales-card">
+            <div class="k">Omset 30 Hari (Detail) 📊</div>
+            <div class="v" id="omsetDetail">—</div>
+            <div style="font-size:9px; color:#888; margin-top:2px;" id="omsetDetailNote"></div>
+          </div>
+        </div>
+        <div class="data-source-note" style="margin-bottom:10px;">
+          <strong>ℹ️ Metode:</strong>
+          <ul>
+            <li><b>Quick:</b> Terjual/Bulan × Harga Rata-rata</li>
+            <li><b>Detail:</b> Review 30hr × Harga Varian × Koreksi</li>
+          </ul>
+        </div>
+
         <!-- Info Toko -->
         <div class="section-title"><span>🏪 Info Toko</span></div>
         <div id="shopInfoWrap" class="muted">Data toko belum tersedia</div>
@@ -566,6 +593,36 @@ function render(shadow, output) {
     }
   }
 
+  // ── Estimasi Omset ──
+  const omsetQuickEl = shadow.getElementById('omsetQuick');
+  const omsetDetailEl = shadow.getElementById('omsetDetail');
+  const omsetQuickNote = shadow.getElementById('omsetQuickNote');
+  const omsetDetailNote = shadow.getElementById('omsetDetailNote');
+  const omset = output.omset || {};
+
+  if (omsetQuickEl) {
+    if (omset.quick_value > 0) {
+      omsetQuickEl.textContent = formatRupiah(omset.quick_value);
+      const srcLabel = omset.sold_per_month_source === 'ESTIMATED'
+        ? `~${Number(omset.sold_per_month || 0).toLocaleString('id-ID')} unit (est.) \u00d7 ${formatRupiah(omset.avg_price || 0)}`
+        : `${Number(omset.sold_per_month || 0).toLocaleString('id-ID')} unit \u00d7 ${formatRupiah(omset.avg_price || 0)}`;
+      if (omsetQuickNote) omsetQuickNote.textContent = srcLabel;
+    } else {
+      omsetQuickEl.textContent = '\u2014';
+      if (omsetQuickNote) omsetQuickNote.textContent = 'Belum ada data (scrape dulu)';
+    }
+  }
+
+  if (omsetDetailEl) {
+    if (omset.detail_value > 0) {
+      omsetDetailEl.textContent = formatRupiah(omset.detail_value);
+      if (omsetDetailNote) omsetDetailNote.textContent = `${omset.reviews_30d || 0} review (30hr), koreksi ${omset.correction_factor || '?'}\u00d7`;
+    } else {
+      omsetDetailEl.textContent = '\u2014';
+      if (omsetDetailNote) omsetDetailNote.textContent = 'Belum ada review dalam 30 hari terakhir';
+    }
+  }
+
   // ── Info Toko ──
   const shopWrap = shadow.getElementById('shopInfoWrap');
   const shopTableWrap = shadow.getElementById('shopTableWrap');
@@ -666,6 +723,11 @@ async function refreshFromStorage(shadow, savedsource) {
     const count = fetchStatus.split(':')[1] || '0';
     const srcBadge = src === 'api' ? 'API' : src === 'api+dom' ? 'API+DOM' : src === 'dom' ? 'DOM' : '';
     setBadge(shadow, `${srcBadge} ✓ ${count} ulasan`, src === 'api+dom' ? 'api' : (src || 'api'));
+    if (btnStop) btnStop.style.display = 'none';
+    if (btnScrape) btnScrape.disabled = false;
+  } else if (fetchStatus && fetchStatus.startsWith('stopped:')) {
+    const count = fetchStatus.split(':')[1] || '0';
+    setBadge(shadow, `🛑 Dihentikan (${count} ulasan)`, 'dom');
     if (btnStop) btnStop.style.display = 'none';
     if (btnScrape) btnScrape.disabled = false;
   } else if (fetchStatus === 'error') {

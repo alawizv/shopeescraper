@@ -907,6 +907,35 @@
     if (message.action === 'STOP_SCRAPE') {
       console.log('[Shopee Scraper V3] 🛑 Perintah STOP diterima. Scraping akan dihentikan di putaran berikutnya.');
       window.CS_SHOPEE_STOP_FLAG = true;
+      
+      // Jika ada review yang sudah terkumpul di interceptor (dari progressive save),
+      // simpan langsung sebagai 'done' agar panel menampilkan persentase yang benar
+      // dari data yang sudah ada, tanpa menunggu loop selesai
+      const currentReviewCount = (() => {
+        try {
+          const reviews = interceptedData.reviews;
+          if (!reviews || reviews.length === 0) return 0;
+          // Hitung jumlah rating dari semua batch yang ada
+          let count = 0;
+          reviews.forEach(batch => {
+            const ratings = batch?.data?.ratings || batch?.ratings || [];
+            if (Array.isArray(ratings)) count += ratings.length;
+          });
+          return count;
+        } catch(e) { return 0; }
+      })();
+      
+      if (currentReviewCount > 0) {
+        // Ada review yang sudah tersimpan — tandai sebagai done agar persentase langsung muncul
+        interceptedData.fetchStatus = `done:${currentReviewCount}`;
+        saveDataToStorage();
+        console.log(`[Shopee Scraper V3] 💾 STOP: Menyimpan ${currentReviewCount} review yang sudah terkumpul.`);
+      } else {
+        // Belum ada data review — set status stopped agar badge update
+        interceptedData.fetchStatus = `stopped:0`;
+        saveDataToStorage();
+      }
+      
       sendResponse({ status: 'stopping' });
       return false;
     }
@@ -915,6 +944,9 @@
       // ⚡ PERBAIKAN KRITIS: Balas SEGERA agar channel Chrome tidak timeout (>30 detik)
       // Fetch review berlanjut di background, panel akan auto-update via storage.onChanged
       sendResponse({ status: 'processing' });
+      
+      // Reset stop flag — penting agar scrape bisa berjalan jika sebelumnya pernah di-stop
+      window.CS_SHOPEE_STOP_FLAG = false;
       
       // Set loading status
       interceptedData.fetchStatus = 'loading:0';
@@ -1314,13 +1346,15 @@
       totalReviewsOfficial = countArr[0] || item?.history_sold || 0;
     } catch(e) {}
     
-    const targetScraped = totalReviewsOfficial > 0 ? Math.ceil(totalReviewsOfficial * 0.3) : Infinity;
-    console.log(`%c[Shopee Scraper V3] 🎯 Target 30% cakupan: ${targetScraped !== Infinity ? targetScraped : 'Semua'} review. Saat ini: ${allReviews.length}`, 'background: teal; color: white;');
+    // PERBAIKAN: Ambil 100% ulasan, tidak dibatasi 30% lagi.
+    const targetScraped = totalReviewsOfficial > 0 ? Math.ceil(totalReviewsOfficial) : Infinity;
+    console.log(`%c[Shopee Scraper V3] 🎯 Target cakupan: ${targetScraped !== Infinity ? targetScraped : 'Semua'} review. Saat ini: ${allReviews.length}`, 'background: teal; color: white;');
 
       if (allReviews.length < targetScraped && !window.CS_SHOPEE_STOP_FLAG) {
       console.log('%c[Shopee Scraper V3] 📜 Scroll ke bagian review + simulasi pagination...', 'background: teal; color: white;');
       let paginationRounds = 0;
-      const MAX_PAGINATION_ROUNDS = 500; // Maks 500 halaman klik (sekitar 3000 review)
+      const MAX_PAGINATION_ROUNDS = 3000; // Maks 3000 halaman klik (sekitar 18000 review)
+      let currentFilterTabIndex = 0; // Mulai dari tab "Semua" (index 0)
         
         try {
           // Scroll ke bagian review
@@ -1484,8 +1518,46 @@
           }
           
           if (!clicked) {
-            console.log(`%c[Shopee Scraper V3] 🏁 Tidak ada tombol next page lagi (atau tidak valid). Total: ${allReviews.length}`, 'background: green; color: white;');
-            break;
+            console.log(`%c[Shopee Scraper V3] 🏁 Tidak ada tombol next page lagi di tab ini. Mencoba pindah tab filter...`, 'background: orange; color: black;');
+            
+            // Coba temukan semua tombol filter review
+            const filterSelectors = [
+              '.product-ratings .product-rating-overview__filter',
+              '[class*="product-rating"] [class*="filter"]',
+              '.shopee-product-rating [role="tab"]'
+            ];
+            
+            let filterBtns = [];
+            for (const sel of filterSelectors) {
+              const fbs = document.querySelectorAll(sel);
+              if (fbs.length > 0) {
+                filterBtns = Array.from(fbs);
+                break;
+              }
+            }
+            
+            currentFilterTabIndex++;
+            
+            if (filterBtns.length > 0 && currentFilterTabIndex < filterBtns.length) {
+                const fBtn = filterBtns[currentFilterTabIndex];
+                const fLabel = (fBtn.textContent || '').trim().substring(0, 15);
+                console.log(`[Shopee Scraper V3] 🔄 Pindah ke tab filter: ${fLabel}`);
+                
+                try {
+                  fBtn.click();
+                  await new Promise(r => setTimeout(r, 2000));
+                  // Kita berhasil pindah tab, lanjut ke loop pagination lagi!
+                  clicked = true;
+                } catch(e) {
+                  console.warn('[Shopee Scraper] Gagal klik tab filter', e);
+                }
+            }
+
+            // Jika masih !clicked, berarti gagal pindah tab atau tab sudah habis
+            if (!clicked) {
+              console.log(`%c[Shopee Scraper V3] 🏁 Semua tab exhaust. Total review: ${allReviews.length}`, 'background: green; color: white;');
+              break;
+            }
           }
 
           if (window.CS_SHOPEE_STOP_FLAG) {
@@ -1543,9 +1615,9 @@
             }
           }
           
-          // Berhenti jika sudah mencapai 30% dari total review atau STOP ditekan
+          // Berhenti jika sudah mencapai target atau STOP ditekan
           if (allReviews.length >= targetScraped || window.CS_SHOPEE_STOP_FLAG) {
-            console.log(`%c[Shopee Scraper V3] 🎯 Target 30% tercapai atau STOP ditekan (${allReviews.length} dari ${totalReviewsOfficial}). Menghentikan klik next!`, 'background: green; color: white; font-weight: bold;');
+            console.log(`%c[Shopee Scraper V3] 🎯 Target tercapai atau STOP ditekan (${allReviews.length} dari ${totalReviewsOfficial}). Menghentikan klik next!`, 'background: green; color: white; font-weight: bold;');
             break;
           }
           

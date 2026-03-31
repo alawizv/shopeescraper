@@ -297,6 +297,13 @@ const ShopeeParser = {
     let totalReviewsParsed = 0;
     const reviewVariantsCount = {}; // V1 Logic Proxy Tracker
 
+    // Tracking untuk kalkulasi omset 30 hari
+    let reviews30dCount = 0;
+    let omset30dFromReviews = 0;
+    let reviews30dWithPrice = 0;
+    const nowUnix = Math.floor(Date.now() / 1000);
+    const thirtyDaysAgoUnix = nowUnix - (30 * 24 * 60 * 60);
+
     rawReviewsArray.forEach(rawResponse => {
       // Menangani berbagai format response (API intercept maupun DOM fallback)
       let ratings = [];
@@ -331,6 +338,7 @@ const ShopeeParser = {
             reviewVariantsCount[variantPurchased] = (reviewVariantsCount[variantPurchased] || 0) + 1;
         }
 
+        let matchedPrice = 0;
         if (variantPurchased && variantsArray && variantsArray.length > 0) {
             totalReviewsParsed++; // Menambah rasio total seluruh ulasan
             
@@ -363,9 +371,20 @@ const ShopeeParser = {
                 
                 // Tahap 3: Menghitung Frekuensi Pembelian (Tallying)
                 if (isMatch) {
-                    v.sold_count++; 
+                    v.sold_count++;
+                    matchedPrice = v.price || 0;
                     break;
                 }
+            }
+        }
+
+        // === Tracking Omset 30 Hari ===
+        const reviewTime = review.ctime || review.create_time || review.mtime || 0;
+        if (reviewTime >= thirtyDaysAgoUnix && reviewTime > 0) {
+            reviews30dCount++;
+            if (matchedPrice > 0) {
+                omset30dFromReviews += matchedPrice;
+                reviews30dWithPrice++;
             }
         }
 
@@ -491,7 +510,13 @@ const ShopeeParser = {
       reviews: allReviews.slice(0, 50),
       totalReviewsParsed: totalReviewsParsed,
       tierSummaries: tierSummaries,
-      reviewVariantsCount: reviewVariantsCount
+      reviewVariantsCount: reviewVariantsCount,
+      omset30d: {
+        reviews_in_30d: reviews30dCount,
+        reviews_with_price: reviews30dWithPrice,
+        omset_from_reviews: omset30dFromReviews,
+        avg_price_from_reviews: reviews30dWithPrice > 0 ? Math.round(omset30dFromReviews / reviews30dWithPrice) : 0
+      }
     };
   },
 
@@ -541,19 +566,20 @@ const ShopeeParser = {
     // Parse data toko jika ada
     const shop = rawShopData ? this.parseShop(rawShopData) : null;
 
-    // Tahap 4: Mengonversi menjadi Persentase
+    // Tahap 4: Gunakan sales_percentage dari parseNegativeReviews (sudah dihitung benar)
+    // JANGAN hitung ulang di sini — parseNegativeReviews sudah menghitung dengan total
+    // yang tepat (dari api_model atau dari matched review), sehingga totalnya selalu 100%
     const variants = (product?.variants || []).map(v => {
       const soldCount = v.sold_count || 0;
-      const totalVariantSales = recentSalesCount > 0 ? recentSalesCount : 1;
       return {
         tier1: v.tier1 || '-',
         tier2: v.tier2 || '-',
         stock: v.stock || 0,
         price: v.price || null,
         sold_count: soldCount,
-        sales_percentage: recentSalesCount > 0
-          ? Math.round((soldCount / totalVariantSales) * 100)
-          : 0,
+        // Gunakan sales_percentage yang sudah dihitung benar di parseNegativeReviews
+        // Fallback ke 0 jika belum ada ulasan sama sekali
+        sales_percentage: v.sales_percentage !== undefined ? v.sales_percentage : 0,
         model_name: v.model_name || '',
         _isReviewProxy: v._isReviewProxy || false
       };
@@ -569,6 +595,34 @@ const ShopeeParser = {
       monthlySoldValue = monthlySoldFromSearch;
       monthlySoldSource = 'SEARCH_API';
     }
+
+    // === Kalkulasi Omset ===
+    const omset30dData = parseReviewResult?.omset30d || {};
+
+    // Detail: Omset dari review 30 hari × faktor koreksi
+    const reviews30d = omset30dData.reviews_in_30d || 0;
+    const reviews30dWithPrice = omset30dData.reviews_with_price || 0;
+    const omsetFromReviews30d = omset30dData.omset_from_reviews || 0;
+    const correctionFactor = totalReviewsOfficial > 0
+      ? (product?.total_sold || 0) / totalReviewsOfficial
+      : 1;
+    // Jika ada review dengan harga varian, gunakan. Jika tidak, fallback ke avg price.
+    let omsetDetail = 0;
+    if (omsetFromReviews30d > 0) {
+      omsetDetail = omsetFromReviews30d * correctionFactor;
+    } else if (reviews30d > 0) {
+      omsetDetail = reviews30d * priceAvg * correctionFactor;
+    }
+
+    // Quick: Terjual/Bulan × Harga Rata-rata
+    // Fallback: jika API sold_per_month kosong, estimasi dari review 30 hari × koreksi
+    let soldPerMonth = monthlySoldValue || 0;
+    let soldPerMonthSource = monthlySoldSource;
+    if (soldPerMonth === 0 && reviews30d > 0) {
+      soldPerMonth = Math.round(reviews30d * correctionFactor);
+      soldPerMonthSource = 'ESTIMATED';
+    }
+    const omsetQuick = soldPerMonth * priceAvg;
     
     return {
       scraped_at: new Date().toISOString(),
@@ -586,6 +640,17 @@ const ShopeeParser = {
       monthly_sold: {
         value: monthlySoldValue,
         source: monthlySoldSource
+      },
+      omset: {
+        quick_value: omsetQuick,
+        detail_value: Math.round(omsetDetail),
+        sold_per_month: soldPerMonth,
+        sold_per_month_source: soldPerMonthSource,
+        avg_price: Math.round(priceAvg),
+        reviews_30d: reviews30d,
+        reviews_30d_with_price: reviews30dWithPrice,
+        omset_from_reviews: omsetFromReviews30d,
+        correction_factor: Math.round(correctionFactor * 10) / 10
       },
       review_sample: {
         reviews_scraped: recentSalesCount,
