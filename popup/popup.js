@@ -400,7 +400,10 @@
 
     elements.variantTbody.innerHTML = '';
 
-    variants.forEach(v => {
+    // Urutkan varian dari % terjual terbesar ke terkecil (descending)
+    const sortedVariants = [...variants].sort((a, b) => (b.sales_percentage || 0) - (a.sales_percentage || 0));
+
+    sortedVariants.forEach(v => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${escapeHTML(v.tier1 || '-')}</td>

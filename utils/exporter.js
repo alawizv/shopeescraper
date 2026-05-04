@@ -71,7 +71,9 @@ const ShopeeExporter = {
     csvContent += '=== VARIAN PRODUK ===\n';
     if (data.variants && data.variants.length > 0) {
       csvContent += 'Tier 1,Tier 2,% Terjual,Harga\n';
-      data.variants.forEach(v => {
+      // Urutkan dari % terjual terbesar ke terkecil (descending)
+      const sortedVariants = [...data.variants].sort((a, b) => (b.sales_percentage || 0) - (a.sales_percentage || 0));
+      sortedVariants.forEach(v => {
         csvContent += `"${this._escapeCSV(v.tier1 || '-')}","${this._escapeCSV(v.tier2 || '-')}",${v.sales_percentage || 0}%,${v.price || '-'}\n`;
       });
     } else {
@@ -259,7 +261,9 @@ const ShopeeExporter = {
   _buildVariantRows(data) {
     const rows = [['Tier 1', 'Tier 2', '% Terjual', 'Harga']];
     if (data.variants && data.variants.length > 0) {
-      data.variants.forEach(v => {
+      // Urutkan dari % terjual terbesar ke terkecil (descending)
+      const sortedVariants = [...data.variants].sort((a, b) => (b.sales_percentage || 0) - (a.sales_percentage || 0));
+      sortedVariants.forEach(v => {
         rows.push([v.tier1 || '-', v.tier2 || '-', `${v.sales_percentage || 0}%`, v.price || '-']);
       });
     } else {
