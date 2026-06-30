@@ -47,6 +47,37 @@
         </button>
       </div>
 
+      <!-- Filter Bintang Review -->
+      <div class="star-filter-section">
+        <div class="star-filter-header">
+          <span class="star-filter-icon">⭐</span>
+          <span class="star-filter-title">Filter Bintang Review:</span>
+        </div>
+        <div class="star-filter-options">
+          <label class="star-filter-label">
+            <input type="checkbox" class="star-filter-cb" value="5" checked>
+            <span class="star-badge star-5">5★</span>
+          </label>
+          <label class="star-filter-label">
+            <input type="checkbox" class="star-filter-cb" value="4" checked>
+            <span class="star-badge star-4">4★</span>
+          </label>
+          <label class="star-filter-label">
+            <input type="checkbox" class="star-filter-cb" value="3" checked>
+            <span class="star-badge star-3">3★</span>
+          </label>
+          <label class="star-filter-label">
+            <input type="checkbox" class="star-filter-cb" value="2" checked>
+            <span class="star-badge star-2">2★</span>
+          </label>
+          <label class="star-filter-label">
+            <input type="checkbox" class="star-filter-cb" value="1" checked>
+            <span class="star-badge star-1">1★</span>
+          </label>
+        </div>
+        <div class="star-filter-note" id="star-filter-note">Pilih bintang yang ingin diambil reviewnya (hanya review dengan teks min. 10 kata)</div>
+      </div>
+
       <!-- Info Produk -->
       <section class="section">
         <h2 class="section-title">📦 Info Produk</h2>
@@ -79,14 +110,18 @@
 
       <!-- Sampel Review -->
       <section class="section" id="review-sample-section">
-        <h2 class="section-title">📋 Sampel Review</h2>
+        <h2 class="section-title">📋 Sampel Review <span id="review-filter-badge" class="badge" style="font-size:9px; background:#ff6b35; color:white; padding:2px 5px; border-radius:8px; display:none;"></span></h2>
         <div id="reviewSampleWrap" class="muted">Belum ada ulasan yang ter-scrape</div>
         <div id="reviewSampleTableWrap" style="display:none;">
           <table class="data-table">
             <tbody>
               <tr>
-                <td>Ulasan Terbaca (Unik)</td>
+                <td>Review Terscrape (Unik)</td>
                 <td id="sample-scraped" style="text-align: right; font-weight: 600;">0</td>
+              </tr>
+              <tr>
+                <td>Review dengan Teks</td>
+                <td id="sample-with-text" style="text-align: right; font-weight: 600;">0</td>
               </tr>
               <tr>
                 <td>Total Ulasan (Shopee)</td>
@@ -106,6 +141,7 @@
           </div>
         </div>
       </section>
+
 
       <!-- Varian -->
       <section class="section">

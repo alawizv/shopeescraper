@@ -17,6 +17,7 @@
   let currentData = null;
   let parsedProduct = null;
   let negativeReviews = [];
+  let currentStarFilter = [1, 2, 3, 4, 5]; // Default: semua bintang
 
   // ========================================
   // Referensi elemen DOM
@@ -68,6 +69,12 @@
     shopInfoTbody: document.getElementById('shop-info-tbody'),
 
     exportStatus: document.getElementById('export-status'),
+
+    // Star filter
+    starFilterCbs: document.querySelectorAll('.star-filter-cb'),
+    starFilterNote: document.getElementById('star-filter-note'),
+    reviewFilterBadge: document.getElementById('review-filter-badge'),
+    sampleWithText: document.getElementById('sample-with-text'),
   };
 
   // ========================================
@@ -75,6 +82,9 @@
   // ========================================
   async function init() {
     console.log('[Popup] Inisialisasi...');
+
+    // Load filter bintang yang tersimpan dari sesi sebelumnya
+    await loadStarFilter();
 
     setupEventListeners();
 
@@ -147,6 +157,16 @@
   // Setup event listeners
   // ========================================
   function setupEventListeners() {
+
+    // Listener perubahan checkbox filter bintang
+    document.querySelectorAll('.star-filter-cb').forEach(cb => {
+      cb.addEventListener('change', () => {
+        currentStarFilter = getSelectedStarFilters();
+        saveStarFilter(currentStarFilter);
+        updateStarFilterNote(currentStarFilter);
+        updateReviewFilterBadge(currentStarFilter);
+      });
+    });
 
     elements.btnScrape.addEventListener('click', async () => {
       const tab = await getActiveTab();
@@ -299,8 +319,8 @@
         return;
       }
 
-      // parseNegativeReviews selalu mengembalikan { reviews: [], totalReviewsParsed: 0 }
-      const parsedReviews = ShopeeParser.parseNegativeReviews(rawData.rawReviews || [], parsedProduct?.variants || []);
+      // parseNegativeReviews sekarang menerima starFilter sebagai parameter ketiga
+      const parsedReviews = ShopeeParser.parseNegativeReviews(rawData.rawReviews || [], parsedProduct?.variants || [], currentStarFilter);
       negativeReviews = parsedReviews;
 
       currentData = ShopeeParser.buildOutput(
@@ -308,7 +328,8 @@
         parsedReviews,
         rawData.url || '',
         rawData.rawShop || null,
-        rawData.monthlySoldFromSearch || null
+        rawData.monthlySoldFromSearch || null,
+        currentStarFilter
       );
 
       renderProduct(parsedProduct);
@@ -363,6 +384,13 @@
     if (elements.sampleCoverage) elements.sampleCoverage.textContent = sample.coverage_percent + '%';
     if (elements.sampleVariants) elements.sampleVariants.textContent = formatNumber(sample.unique_variants_found);
     if (elements.sampleNote) elements.sampleNote.textContent = sample.data_note || '';
+    
+    // Tampilkan jumlah review yang memiliki teks (filtered_reviews dari output)
+    const reviewWithTextCount = currentData?.filtered_reviews?.length || currentData?.negative_reviews?.length || 0;
+    if (elements.sampleWithText) elements.sampleWithText.textContent = formatNumber(reviewWithTextCount);
+    
+    // Update badge filter
+    updateReviewFilterBadge(currentStarFilter);
   }
 
   function renderVariants(variants, tierSummaries = []) {
@@ -594,6 +622,83 @@
         resolve(result[key] || null);
       });
     });
+  }
+
+  // ========================================
+  // Star Filter Helper Functions
+  // ========================================
+
+  /**
+   * Baca checkbox yang dipilih dan return array angka bintang
+   */
+  function getSelectedStarFilters() {
+    const selected = [];
+    document.querySelectorAll('.star-filter-cb:checked').forEach(cb => {
+      selected.push(parseInt(cb.value, 10));
+    });
+    // Jika tidak ada yang dipilih, default semua bintang
+    return selected.length > 0 ? selected : [1, 2, 3, 4, 5];
+  }
+
+  /**
+   * Simpan filter bintang ke chrome.storage agar persistent
+   */
+  function saveStarFilter(starFilter) {
+    chrome.storage.local.set({ shopeeStarFilter: starFilter }, () => {});
+  }
+
+  /**
+   * Load filter bintang dari chrome.storage, apply ke checkbox
+   */
+  async function loadStarFilter() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get('shopeeStarFilter', (result) => {
+        const saved = result.shopeeStarFilter;
+        if (saved && Array.isArray(saved) && saved.length > 0) {
+          currentStarFilter = saved;
+          // Apply ke checkbox
+          document.querySelectorAll('.star-filter-cb').forEach(cb => {
+            cb.checked = saved.includes(parseInt(cb.value, 10));
+          });
+        } else {
+          currentStarFilter = [1, 2, 3, 4, 5];
+        }
+        updateStarFilterNote(currentStarFilter);
+        updateReviewFilterBadge(currentStarFilter);
+        resolve();
+      });
+    });
+  }
+
+  /**
+   * Update teks catatan filter bintang
+   */
+  function updateStarFilterNote(starFilter) {
+    const note = document.getElementById('star-filter-note');
+    if (!note) return;
+    
+    if (starFilter.length === 5) {
+      note.textContent = 'Semua bintang dipilih — semua review berteks akan dikumpulkan';
+    } else {
+      const sorted = [...starFilter].sort((a, b) => b - a);
+      note.textContent = `Bintang ${sorted.join(', ')} dipilih — hanya review bintang tersebut yang masuk export`;
+    }
+  }
+
+  /**
+   * Update badge filter di section Sampel Review
+   */
+  function updateReviewFilterBadge(starFilter) {
+    const badge = document.getElementById('review-filter-badge');
+    if (!badge) return;
+    
+    if (starFilter.length === 5) {
+      badge.style.display = 'none';
+    } else {
+      const sorted = [...starFilter].sort((a, b) => b - a);
+      badge.textContent = sorted.map(s => `${s}★`).join(' ');
+      badge.style.display = 'inline';
+    }
   }
 
   // ========================================

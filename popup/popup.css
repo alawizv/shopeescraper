@@ -598,3 +598,90 @@ body {
   color: #757575;
 }
 
+/* === Star Filter Section === */
+.star-filter-section {
+  margin: 0 12px 8px;
+  padding: 10px 12px;
+  background: #fff8f0;
+  border: 1px solid #ffe0cc;
+  border-radius: 8px;
+}
+
+.star-filter-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.star-filter-icon {
+  font-size: 13px;
+}
+
+.star-filter-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #cc4400;
+  letter-spacing: 0.2px;
+}
+
+.star-filter-options {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.star-filter-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.star-filter-label input[type="checkbox"] {
+  display: none; /* Sembunyikan checkbox asli, tampilkan badge */
+}
+
+.star-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 2px solid transparent;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  opacity: 0.35;
+}
+
+/* Warna badge per bintang (saat tidak dipilih = lebih pudar) */
+.star-badge.star-5 { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
+.star-badge.star-4 { background: #f0fdf4; color: #15803d; border-color: #86efac; }
+.star-badge.star-3 { background: #fefce8; color: #ca8a04; border-color: #fde047; }
+.star-badge.star-2 { background: #fff7ed; color: #ea580c; border-color: #fdba74; }
+.star-badge.star-1 { background: #fff1f2; color: #e11d48; border-color: #fda4af; }
+
+/* Saat checkbox ter-check, badge jadi opaque dan lebih tebal */
+.star-filter-label input[type="checkbox"]:checked + .star-badge {
+  opacity: 1;
+  border-width: 2px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+
+.star-filter-label:hover .star-badge {
+  opacity: 0.7;
+  transform: scale(1.05);
+}
+.star-filter-label input[type="checkbox"]:checked + .star-badge:hover {
+  opacity: 1;
+}
+
+.star-filter-note {
+  margin-top: 7px;
+  font-size: 9.5px;
+  color: #888;
+  font-style: italic;
+  line-height: 1.4;
+}
+

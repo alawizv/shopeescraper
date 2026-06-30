@@ -258,7 +258,11 @@ const ShopeeParser = {
   /**
    * Parse dan filter review negatif serta review u/ varian
    */
-  parseNegativeReviews(rawReviewsArray, variantsArray = []) {
+  /**
+   * starFilter: array bintang yang ingin dikumpulkan, misal [4,5] atau [1,2,3,4,5]
+   * Default: semua bintang (1-5)
+   */
+  parseNegativeReviews(rawReviewsArray, variantsArray = [], starFilter = [1,2,3,4,5]) {
     if (!rawReviewsArray || !Array.isArray(rawReviewsArray)) return { reviews: [], totalReviewsParsed: 0 };
 
     const allReviews = [];
@@ -389,11 +393,11 @@ const ShopeeParser = {
         }
 
         // ===================================
-        // Fitur Review Negatif Terfilter
-        // Hanya kumpulkan review bintang 1, 2, atau 3 yang memiliki komentar
+        // Fitur Review Terfilter (berdasarkan pilihan bintang user)
+        // Hanya kumpulkan review sesuai starFilter yang memiliki komentar
         // dengan jumlah kata minimal 10.
         // ===================================
-        if (stars > 3 || stars < 1) return;
+        if (!starFilter.includes(stars)) return;
 
         const comment = (review.comment || review.content || '').trim();
         if (!comment) return;
@@ -505,12 +509,13 @@ const ShopeeParser = {
         });
     }
 
-    // Return object containing both the negative reviews and the total reviews counted (for trend)
+    // Return object containing both the filtered reviews and the total reviews counted (for trend)
     return {
-      reviews: allReviews.slice(0, 50),
+      reviews: allReviews, // Kembalikan SEMUA review yang lolos filter (tanpa batas 50)
       totalReviewsParsed: totalReviewsParsed,
       tierSummaries: tierSummaries,
       reviewVariantsCount: reviewVariantsCount,
+      starFilter: starFilter, // Simpan filter yang digunakan untuk label export
       omset30d: {
         reviews_in_30d: reviews30dCount,
         reviews_with_price: reviews30dWithPrice,
@@ -551,9 +556,12 @@ const ShopeeParser = {
    * @param {object|null} rawShopData
    * @param {number|null} monthlySoldFromSearch - Data riil dari search API Shopee (tertinggi prioritasnya)
    */
-  buildOutput(product, parseReviewResult, url, rawShopData, monthlySoldFromSearch = null) {
+  buildOutput(product, parseReviewResult, url, rawShopData, monthlySoldFromSearch = null, starFilter = [1,2,3,4,5]) {
     const negativeReviews = parseReviewResult?.reviews || [];
     const recentSalesCount = parseReviewResult?.totalReviewsParsed || 0;
+    const activeStarFilter = parseReviewResult?.starFilter || starFilter;
+    const starFilterLabel = activeStarFilter.length === 5 ? 'Semua Bintang' : `Bintang ${activeStarFilter.sort((a,b)=>b-a).join(', ')}`;
+    const starFilterLabelShort = activeStarFilter.sort((a,b)=>b-a).map(s=>`${s}★`).join('+');
     
     const priceAvg = ((product?.price_min || 0) + (product?.price_max || product?.price_min || 0)) / 2;
     
@@ -662,7 +670,11 @@ const ShopeeParser = {
           : 'Belum ada ulasan yang ter-scrape'
       },
       variants: variants,
-      negative_reviews: negativeReviews || []
+      star_filter: activeStarFilter,
+      star_filter_label: starFilterLabel,
+      star_filter_label_short: starFilterLabelShort,
+      filtered_reviews: negativeReviews || [], // Nama lebih netral (bukan hanya 'negatif')
+      negative_reviews: negativeReviews || []  // Tetap ada untuk backward compatibility
     };
   }
 };

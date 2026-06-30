@@ -81,14 +81,20 @@ const ShopeeExporter = {
     }
     csvContent += '\n';
 
-    csvContent += '=== REVIEW NEGATIF (Bintang 1-3) ===\n';
-    if (data.negative_reviews && data.negative_reviews.length > 0) {
+    // Label section review dinamis sesuai filter bintang
+    const reviewLabel = data.star_filter_label
+      ? `=== REVIEW (${data.star_filter_label.toUpperCase()}) ===`
+      : '=== REVIEW ==='; 
+    const reviewData = data.filtered_reviews || data.negative_reviews || [];
+    
+    csvContent += reviewLabel + '\n';
+    if (reviewData.length > 0) {
       csvContent += 'Bintang,Komentar,Tanggal,Username,Varian\n';
-      data.negative_reviews.forEach(r => {
+      reviewData.forEach(r => {
         csvContent += `${r.stars},"${this._escapeCSV(r.comment || '')}","${r.date || ''}","${this._escapeCSV(r.user || '')}","${this._escapeCSV(r.variant || '-')}"\n`;
       });
     } else {
-      csvContent += 'Tidak ada review negatif\n';
+      csvContent += 'Tidak ada review yang sesuai filter\n';
     }
 
     const BOM = '\uFEFF';
@@ -167,7 +173,7 @@ const ShopeeExporter = {
           { properties: { title: 'Product Info' } },
           { properties: { title: 'Trend' } },
           { properties: { title: 'Variants' } },
-          { properties: { title: 'Negative Reviews' } }
+          { properties: { title: data.star_filter_label_short ? `Reviews (${data.star_filter_label_short})` : 'Reviews' } }
         ]
       })
     });
@@ -183,7 +189,7 @@ const ShopeeExporter = {
     await this._writeProductInfo(token, spreadsheetId, data);
     await this._writeSheetData(token, spreadsheetId, 'Trend', this._buildTrendRows(data));
     await this._writeVariants(token, spreadsheetId, data);
-    await this._writeNegativeReviews(token, spreadsheetId, data);
+    await this._writeNegativeReviews(token, spreadsheetId, data, data.star_filter_label_short ? `Reviews (${data.star_filter_label_short})` : 'Reviews');
 
     return spreadsheetId;
   },
@@ -217,7 +223,8 @@ const ShopeeExporter = {
     await this._writeSheetData(token, spreadsheetId, `${sheetTitle} - Product`, this._buildProductRows(data));
     await this._writeSheetData(token, spreadsheetId, `${sheetTitle} - Trend`, this._buildTrendRows(data));
     await this._writeSheetData(token, spreadsheetId, `${sheetTitle} - Variants`, this._buildVariantRows(data));
-    await this._writeSheetData(token, spreadsheetId, `${sheetTitle} - Reviews`, this._buildReviewRows(data));
+    const reviewSheetTitle = data.star_filter_label_short ? `${sheetTitle} - Reviews (${data.star_filter_label_short})` : `${sheetTitle} - Reviews`;
+    await this._writeSheetData(token, spreadsheetId, reviewSheetTitle, this._buildReviewRows(data));
   },
 
   async _writeProductInfo(token, spreadsheetId, data) {
@@ -228,8 +235,8 @@ const ShopeeExporter = {
     await this._writeSheetData(token, spreadsheetId, 'Variants', this._buildVariantRows(data));
   },
 
-  async _writeNegativeReviews(token, spreadsheetId, data) {
-    await this._writeSheetData(token, spreadsheetId, 'Negative Reviews', this._buildReviewRows(data));
+  async _writeNegativeReviews(token, spreadsheetId, data, sheetName = 'Reviews') {
+    await this._writeSheetData(token, spreadsheetId, sheetName, this._buildReviewRows(data));
   },
 
   _buildProductRows(data) {
@@ -273,13 +280,20 @@ const ShopeeExporter = {
   },
 
   _buildReviewRows(data) {
-    const rows = [['Bintang', 'Komentar', 'Tanggal', 'Username', 'Varian']];
-    if (data.negative_reviews && data.negative_reviews.length > 0) {
-      data.negative_reviews.forEach(r => {
+    // Label header dinamis berdasarkan filter bintang
+    const headerLabel = data.star_filter_label
+      ? `Bintang (Filter: ${data.star_filter_label})`
+      : 'Bintang';
+    
+    const rows = [[headerLabel, 'Komentar', 'Tanggal', 'Username', 'Varian']];
+    // Gunakan filtered_reviews (baru) dengan fallback ke negative_reviews (lama)
+    const reviewData = data.filtered_reviews || data.negative_reviews || [];
+    if (reviewData.length > 0) {
+      reviewData.forEach(r => {
         rows.push([r.stars || 0, r.comment || '', r.date || '', r.user || '', r.variant || '-']);
       });
     } else {
-      rows.push(['Tidak ada review negatif', '', '', '', '']);
+      rows.push(['Tidak ada review yang sesuai filter', '', '', '', '']);
     }
     return rows;
   },
