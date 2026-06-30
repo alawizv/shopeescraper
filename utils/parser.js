@@ -568,7 +568,7 @@ const ShopeeParser = {
     // === SAMPEL REVIEW (data mentah, tanpa pengali) ===
     const totalReviewsOfficial = product?.review_count || 0;
     const sampleCoverage = totalReviewsOfficial > 0
-      ? Math.round((recentSalesCount / totalReviewsOfficial) * 100)
+      ? Math.min(100, Math.round((recentSalesCount / totalReviewsOfficial) * 100))
       : 0;
 
     // Parse data toko jika ada
@@ -666,7 +666,9 @@ const ShopeeParser = {
         coverage_percent: sampleCoverage,
         unique_variants_found: Object.keys(parseReviewResult?.reviewVariantsCount || {}).length,
         data_note: recentSalesCount > 0
-          ? `Sampel dari ${recentSalesCount} ulasan unik (${sampleCoverage}% dari ${totalReviewsOfficial} total)`
+          ? (sampleCoverage >= 100
+              ? `✅ Semua ${totalReviewsOfficial} ulasan berhasil ter-scrape (${recentSalesCount} unik)`
+              : `Sampel dari ${recentSalesCount} ulasan unik (${sampleCoverage}% dari ${totalReviewsOfficial} total)`)
           : 'Belum ada ulasan yang ter-scrape'
       },
       variants: variants,

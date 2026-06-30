@@ -65,14 +65,20 @@ function buildCSV(output) {
   }
   csv += '\n';
 
-  csv += '=== NEGATIVE REVIEWS (1-3) ===\n';
-  if (output.negative_reviews?.length) {
+  // Label section review dinamis
+  const reviewLabel = output.star_filter_label
+    ? `=== REVIEW (${output.star_filter_label.toUpperCase()}) ===`
+    : '=== REVIEW ===';
+  const reviewData = output.filtered_reviews || output.negative_reviews || [];
+
+  csv += reviewLabel + '\n';
+  if (reviewData.length) {
     csv += 'Stars,Date,User,Variant,Comment\n';
-    output.negative_reviews.forEach(r => {
+    reviewData.forEach(r => {
       csv += `${r.stars || ''},"${r.date || ''}","${(r.user || '').replace(/"/g, '""')}","${(r.variant || '-').replace(/"/g, '""')}","${(r.comment || '').replace(/"/g, '""').replace(/\n/g, ' ')}"\n`;
     });
   } else {
-    csv += 'Tidak ada review negatif\n';
+    csv += 'Tidak ada review yang sesuai filter\n';
   }
 
   return '\uFEFF' + csv; // BOM untuk Excel
@@ -346,12 +352,13 @@ function createPanel() {
         </div>
 
         <!-- Sampel Review -->
-        <div class="section-title"><span>📋 Sampel Review</span></div>
+        <div class="section-title"><span>📋 Sampel Review</span><span class="badge" id="filterBadge" style="display:none; background:#ff6b35;"></span></div>
         <div id="reviewSampleWrap" class="muted">Belum ada ulasan yang ter-scrape</div>
         <div id="reviewSampleTableWrap" style="display:none; margin-top:6px;">
           <table>
             <tbody>
-              <tr><td>Ulasan Terbaca (Unik)</td><td id="sampleScraped" style="text-align:right;font-weight:700;">0</td></tr>
+              <tr><td>Review Terscrape (Unik)</td><td id="sampleScraped" style="text-align:right;font-weight:700;">0</td></tr>
+              <tr><td>Review dengan Teks</td><td id="sampleWithText" style="text-align:right;font-weight:700;">0</td></tr>
               <tr><td>Total Ulasan (Shopee)</td><td id="sampleTotal" style="text-align:right;font-weight:700;">0</td></tr>
               <tr><td>Cakupan Sampel</td><td id="sampleCoverage" style="text-align:right;font-weight:700;">0%</td></tr>
               <tr><td>Varian Unik Ditemukan</td><td id="sampleVariants" style="text-align:right;font-weight:700;">0</td></tr>
@@ -431,12 +438,12 @@ function createPanel() {
           </div>
         </div>
 
-        <!-- Ulasan Negatif Terfilter -->
+        <!-- Review Terfilter -->
         <div class="section-title">
-          <span>⚠️ Ulasan Negatif Terfilter</span>
+          <span id="reviewSectionTitle">📋 Review Terfilter</span>
           <span class="badge" id="negRevCount">0</span>
         </div>
-        <div id="negWrap" class="muted">Tidak ada ulasan negatif (1-3 ⭐, &ge;10 Kata)</div>
+        <div id="negWrap" class="muted">Tidak ada review yang sesuai filter (≥10 Kata)</div>
         <div id="negTableWrap" style="display:none; max-height:200px; overflow-y:auto; margin-bottom:10px;">
           <table>
             <thead>
@@ -649,12 +656,38 @@ function render(shadow, output) {
     }
   }
 
-  // ── Ulasan Negatif Terfilter ──
+  // ── Review Terfilter ──
   const negWrap = shadow.getElementById('negWrap');
   const negTableWrap = shadow.getElementById('negTableWrap');
   const negTbody = shadow.getElementById('negTbody');
   const negCount = shadow.getElementById('negRevCount');
-  const negRevs = output.negative_reviews || [];
+  const negTitle = shadow.getElementById('reviewSectionTitle');
+  // Gunakan filtered_reviews jika ada (baru), fallback ke negative_reviews
+  const negRevs = output.filtered_reviews || output.negative_reviews || [];
+  
+  // Update label section dinamis sesuai filter bintang
+  if (negTitle) {
+    const starLabel = output.star_filter_label || null;
+    if (starLabel && output.star_filter?.length !== 5) {
+      // Filter spesifik
+      negTitle.textContent = `📋 Review (${starLabel})`;
+    } else {
+      // Semua bintang
+      negTitle.textContent = '📋 Review Terfilter';
+    }
+  }
+  
+  // Update badge filter di sampel review
+  const filterBadge = shadow.getElementById('filterBadge');
+  if (filterBadge) {
+    const sf = output.star_filter || [];
+    if (sf.length > 0 && sf.length < 5) {
+      filterBadge.textContent = [...sf].sort((a,b) => b-a).map(s => `${s}★`).join(' ');
+      filterBadge.style.display = 'inline';
+    } else {
+      filterBadge.style.display = 'none';
+    }
+  }
 
   if (negCount) negCount.textContent = negRevs.length;
 
@@ -697,16 +730,32 @@ async function refreshFromStorage(shadow, savedsource) {
     return;
   }
 
+  // Load star filter dari storage
+  const starFilter = await new Promise(resolve => {
+    chrome.storage.local.get('shopeeStarFilter', (res) => {
+      const sf = res.shopeeStarFilter;
+      resolve((sf && Array.isArray(sf) && sf.length > 0) ? sf : [1,2,3,4,5]);
+    });
+  });
+
   const product = ShopeeParser.parseProduct(saved.rawProduct);
-  const neg = ShopeeParser.parseNegativeReviews(saved.rawReviews || [], product?.variants || []);
+  const neg = ShopeeParser.parseNegativeReviews(saved.rawReviews || [], product?.variants || [], starFilter);
   const output = ShopeeParser.buildOutput(
     product, neg,
     saved.url || location.href,
     saved.rawShop || null,
-    saved.monthlySoldFromSearch || null  // Data riil Terjual/Bulan dari search API
+    saved.monthlySoldFromSearch || null,
+    starFilter
   );
 
   render(shadow, output);
+  
+  // Update sampleWithText jika ada
+  const sampleWithTextEl = shadow.getElementById('sampleWithText');
+  if (sampleWithTextEl) {
+    const filteredCount = output.filtered_reviews?.length || output.negative_reviews?.length || 0;
+    sampleWithTextEl.textContent = Number(filteredCount).toLocaleString('id-ID');
+  }
 
   // Badge logic & Button State: prioritas fetchStatus > dataSource
   const fetchStatus = saved.fetchStatus || null;
@@ -886,9 +935,16 @@ function makeDraggable(host, handle) {
   shadow.getElementById('btnJSON').addEventListener('click', async () => {
     const saved = await getScraperData();
     if (!saved?.rawProduct) return;
+    // Load star filter dari storage
+    const sfJSON = await new Promise(resolve => {
+      chrome.storage.local.get('shopeeStarFilter', (res) => {
+        const sf = res.shopeeStarFilter;
+        resolve((sf && Array.isArray(sf) && sf.length > 0) ? sf : [1,2,3,4,5]);
+      });
+    });
     const product = ShopeeParser.parseProduct(saved.rawProduct);
-    const neg = ShopeeParser.parseNegativeReviews(saved.rawReviews || [], product?.variants || []);
-    const output = ShopeeParser.buildOutput(product, neg, saved.url || location.href, saved.rawShop || null);
+    const neg = ShopeeParser.parseNegativeReviews(saved.rawReviews || [], product?.variants || [], sfJSON);
+    const output = ShopeeParser.buildOutput(product, neg, saved.url || location.href, saved.rawShop || null, null, sfJSON);
     const blob = new Blob([JSON.stringify(output, null, 2)], { type: 'application/json' });
     downloadBlob(blob, `shopee_${Date.now()}.json`);
   });
@@ -897,9 +953,16 @@ function makeDraggable(host, handle) {
   shadow.getElementById('btnCSV').addEventListener('click', async () => {
     const saved = await getScraperData();
     if (!saved?.rawProduct) return;
+    // Load star filter dari storage
+    const sfCSV = await new Promise(resolve => {
+      chrome.storage.local.get('shopeeStarFilter', (res) => {
+        const sf = res.shopeeStarFilter;
+        resolve((sf && Array.isArray(sf) && sf.length > 0) ? sf : [1,2,3,4,5]);
+      });
+    });
     const product = ShopeeParser.parseProduct(saved.rawProduct);
-    const neg = ShopeeParser.parseNegativeReviews(saved.rawReviews || [], product?.variants || []);
-    const output = ShopeeParser.buildOutput(product, neg, saved.url || location.href, saved.rawShop || null);
+    const neg = ShopeeParser.parseNegativeReviews(saved.rawReviews || [], product?.variants || [], sfCSV);
+    const output = ShopeeParser.buildOutput(product, neg, saved.url || location.href, saved.rawShop || null, null, sfCSV);
     const blob = new Blob([buildCSV(output)], { type: 'text/csv;charset=utf-8;' });
     downloadBlob(blob, `shopee_${Date.now()}.csv`);
   });
