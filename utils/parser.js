@@ -560,8 +560,9 @@ const ShopeeParser = {
     const negativeReviews = parseReviewResult?.reviews || [];
     const recentSalesCount = parseReviewResult?.totalReviewsParsed || 0;
     const activeStarFilter = parseReviewResult?.starFilter || starFilter;
-    const starFilterLabel = activeStarFilter.length === 5 ? 'Semua Bintang' : `Bintang ${activeStarFilter.sort((a,b)=>b-a).join(', ')}`;
-    const starFilterLabelShort = activeStarFilter.sort((a,b)=>b-a).map(s=>`${s}★`).join('+');
+    const activeStarFilterSorted = [...activeStarFilter].sort((a,b)=>b-a);
+    const starFilterLabel = activeStarFilter.length === 5 ? 'Semua Bintang' : `Bintang ${activeStarFilterSorted.join(', ')}`;
+    const starFilterLabelShort = activeStarFilterSorted.map(s=>`${s}★`).join('+');
     
     const priceAvg = ((product?.price_min || 0) + (product?.price_max || product?.price_min || 0)) / 2;
     

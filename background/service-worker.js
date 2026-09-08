@@ -159,7 +159,7 @@ async function createNewSpreadsheet(token, data, dateStr) {
 async function appendToExistingSheet(token, spreadsheetId, data, dateStr) {
   const prefix = `Scrape ${dateStr}`;
 
-  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+  const batchResp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -175,6 +175,11 @@ async function appendToExistingSheet(token, spreadsheetId, data, dateStr) {
       ]
     })
   });
+
+  if (!batchResp.ok) {
+    const errText = await batchResp.text();
+    throw new Error(`Gagal menambah sheet baru: ${errText}`);
+  }
 
   await writeToSheet(token, spreadsheetId, `${prefix} - Product`, buildProductRows(data));
   await writeToSheet(token, spreadsheetId, `${prefix} - Shop`, buildShopRows(data));

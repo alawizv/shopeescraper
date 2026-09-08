@@ -201,7 +201,7 @@ const ShopeeExporter = {
     const dateStr = this._getDateString();
     const sheetTitle = `Scrape ${dateStr}`;
 
-    await fetch(
+    const batchResp = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
       {
         method: 'POST',
@@ -219,6 +219,11 @@ const ShopeeExporter = {
         })
       }
     );
+
+    if (!batchResp.ok) {
+      const errText = await batchResp.text();
+      throw new Error(`Gagal menambah sheet baru: ${errText}`);
+    }
 
     await this._writeSheetData(token, spreadsheetId, `${sheetTitle} - Product`, this._buildProductRows(data));
     await this._writeSheetData(token, spreadsheetId, `${sheetTitle} - Trend`, this._buildTrendRows(data));
