@@ -873,8 +873,8 @@
         const ratingVal = item.item_rating?.rating_star || item.item_rating?.star || item.rating_star || 0;
         const ratingStar = Math.round(ratingVal * 10) / 10;
 
-        const shopId = item.shopid || item.shop_id || null;
-        const url = `https://shopee.co.id/product/${shopId || '0'}/${itemId}`;
+        const origin = window.location.origin || 'https://shopee.co.id';
+        const url = `${origin}/product/${shopId || '0'}/${itemId}`;
 
         const productObj = {
           itemid: String(itemId),
@@ -1030,7 +1030,8 @@
     if (!ids) throw new Error('Tidak bisa mengekstrak ID produk');
     
     // Shopee get_pc endpoint biasa
-    const apiUrl = `https://shopee.co.id/api/v4/pdp/get_pc?item_id=${ids.itemId}&shop_id=${ids.shopId}`;
+    const origin = window.location.origin || 'https://shopee.co.id';
+    const apiUrl = `${origin}/api/v4/pdp/get_pc?item_id=${ids.itemId}&shop_id=${ids.shopId}`;
     const response = await fetch(apiUrl, {
       credentials: 'include',
       headers: {
@@ -1212,7 +1213,7 @@
    */
   function checkIsProductPage() {
     const url = window.location.href;
-    return /shopee\.co\.id\/.+-i\.\d+\.\d+/.test(url);
+    return /shopee\.[a-z.]+\/.+-i\.\d+\.\d+/.test(url) || /shopee\.[a-z.]+\/product\/\d+\/\d+/.test(url);
   }
 
   /**
@@ -1337,7 +1338,8 @@
       shopId = item?.shopid || item?.shop_id || shopId;
     }
 
-    const apiUrl = `https://shopee.co.id/api/v4/shop/get_shop_detail?shopid=${shopId}`;
+    const origin = window.location.origin || 'https://shopee.co.id';
+    const apiUrl = `${origin}/api/v4/shop/get_shop_detail?shopid=${shopId}`;
 
     const response = await fetch(apiUrl, {
       credentials: 'include',
@@ -1390,7 +1392,8 @@
 
     try {
       while (page < maxPages) {
-        const apiUrl = `https://shopee.co.id/api/v2/item/get_ratings?filter=0&flag=1&itemid=${ids.itemId}&limit=${limit}&offset=${offset}&shopid=${ids.shopId}&type=0`;
+        const origin = window.location.origin || 'https://shopee.co.id';
+        const apiUrl = `${origin}/api/v2/item/get_ratings?filter=0&flag=1&itemid=${ids.itemId}&limit=${limit}&offset=${offset}&shopid=${ids.shopId}&type=0`;
         const response = await fetch(apiUrl, {
           credentials: 'include',
           headers: {
@@ -1857,7 +1860,8 @@
             break;
           }
 
-          const apiUrl = `https://shopee.co.id/api/v2/item/get_ratings?filter=0&flag=1&itemid=${ids.itemId}&limit=${limit}&offset=${offset}&shopid=${ids.shopId}&type=0`;
+          const origin = window.location.origin || 'https://shopee.co.id';
+          const apiUrl = `${origin}/api/v2/item/get_ratings?filter=0&flag=1&itemid=${ids.itemId}&limit=${limit}&offset=${offset}&shopid=${ids.shopId}&type=0`;
           const response = await fetch(apiUrl, {
             credentials: 'include',
             headers: {

@@ -506,6 +506,7 @@
       renderShopInfo(currentData.shop || null);
       renderVariants(currentData.variants || [], currentData.tierSummaries || []);
       renderReviewList(currentData.filtered_reviews || currentData.negative_reviews || []);
+      renderReviewInsights(currentData.review_insights || null);
 
       const source = rawData.dataSource === 'api' ? 'API' : rawData.dataSource === 'api+dom' ? 'API+DOM' : 'DOM';
       setStatus('success', `Data dari ${source}`);
@@ -869,6 +870,65 @@
   }
 
   /**
+   * Render Review Insights (Analisis Keluhan Pembeli)
+   */
+  function renderReviewInsights(insights) {
+    const wrap = document.getElementById('insight-content-wrapper');
+    const emptyText = document.getElementById('no-insight-text');
+    const badge = document.getElementById('insight-badge');
+    const rateEl = document.getElementById('popup-sentiment-rate');
+    const barEl = document.getElementById('popup-sentiment-bar');
+    const painPointsList = document.getElementById('popup-pain-points');
+    const wordsCloud = document.getElementById('popup-complaint-words');
+
+    if (!insights || insights.total_analyzed === 0 || (!insights.pain_points?.length && !insights.top_complaint_words?.length)) {
+      if (emptyText) emptyText.classList.remove('d-none');
+      if (wrap) wrap.classList.add('d-none');
+      if (badge) badge.style.display = 'none';
+      return;
+    }
+
+    if (emptyText) emptyText.classList.add('d-none');
+    if (wrap) wrap.classList.remove('d-none');
+
+    const totalComplaints = (insights.pain_points || []).reduce((sum, p) => sum + p.count, 0);
+    if (badge) {
+      badge.textContent = `${totalComplaints} Keluhan`;
+      badge.style.display = 'inline';
+    }
+
+    if (rateEl && barEl) {
+      const posRate = insights.sentiment?.positive_rate ?? 100;
+      rateEl.textContent = `${posRate}% Positif | ${100 - posRate}% Keluhan`;
+      barEl.style.width = `${posRate}%`;
+    }
+
+    if (painPointsList) {
+      let html = '';
+      (insights.pain_points || []).forEach(p => {
+        html += `
+          <div class="pain-point-item">
+            <div class="pain-point-header">
+              <span class="pain-point-label">${p.icon} ${escapeHTML(p.label)}</span>
+              <span class="pain-point-count">${p.count}x (${p.percentage}%)</span>
+            </div>
+            ${p.sample ? `<div class="pain-point-sample">"${escapeHTML(p.sample)}"</div>` : ''}
+          </div>
+        `;
+      });
+      painPointsList.innerHTML = html;
+    }
+
+    if (wordsCloud) {
+      let html = '';
+      (insights.top_complaint_words || []).forEach(w => {
+        html += `<span class="complaint-tag">#${escapeHTML(w.word)} (${w.count})</span>`;
+      });
+      wordsCloud.innerHTML = html || '<span style="color:#aaa; font-size:10px;">-</span>';
+    }
+  }
+
+  /**
    * Render data Info Toko
    */
   function renderShopInfo(shop) {
@@ -1045,9 +1105,25 @@
   // ========================================
   // Helper functions
   // ========================================
+  function getCurrencySymbol(url) {
+    const h = (url || '').toLowerCase();
+    if (h.includes('.sg')) return 'S$';
+    if (h.includes('.com.my') || h.includes('.my')) return 'RM';
+    if (h.includes('.ph')) return '₱';
+    if (h.includes('.co.th') || h.includes('.th')) return '฿';
+    if (h.includes('.vn')) return '₫';
+    if (h.includes('.tw')) return 'NT$';
+    if (h.includes('.com.br') || h.includes('.br')) return 'R$';
+    if (h.includes('.com.mx') || h.includes('.mx')) return 'MX$';
+    if (h.includes('.com.co') || h.includes('.co')) return 'COL$';
+    if (h.includes('.cl')) return 'CL$';
+    return 'Rp';
+  }
+
   function formatRupiah(num) {
     if (!num && num !== 0) return '-';
-    return 'Rp' + num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    const sym = getCurrencySymbol(currentData?.url || '');
+    return sym + ' ' + num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   }
 
   function formatNumber(num) {
@@ -1123,6 +1199,18 @@
       });
     }
 
+    if (data.review_insights && (data.review_insights.pain_points?.length || data.review_insights.top_complaint_words?.length)) {
+      const ri = data.review_insights;
+      tsv += N + '=== INSIGHT KELUHAN PEMBELI ===' + N;
+      tsv += 'Kategori Keluhan' + T + 'Jumlah' + T + 'Persentase' + N;
+      (ri.pain_points || []).forEach(p => {
+        tsv += esc(p.label) + T + p.count + T + p.percentage + '%' + N;
+      });
+      if (ri.top_complaint_words?.length) {
+        tsv += N + 'Top Kata Kunci Keluhan' + T + ri.top_complaint_words.map(w => `${w.word} (${w.count}x)`).join(', ') + N;
+      }
+    }
+
     return tsv;
   }
 
@@ -1135,19 +1223,21 @@
 
   function isShopeeProductURL(url) {
     if (!url) return false;
-    return /shopee\.co\.id\/.+-i\.\d+\.\d+/.test(url) || /shopee\.co\.id\/product\/\d+\/\d+/.test(url);
+    return /shopee\.[a-z.]+\/.+-i\.\d+\.\d+/.test(url) || /shopee\.[a-z.]+\/product\/\d+\/\d+/.test(url);
   }
 
   function isShopeeSearchURL(url) {
     if (!url) return false;
-    return /shopee\.co\.id\/search/.test(url);
+    return /shopee\.[a-z.]+\/search/.test(url);
   }
 
   function isShopeeShopURL(url) {
     const u = url || '';
     if (isShopeeProductURL(u) || isShopeeSearchURL(u)) return false;
     try {
-      const p = new URL(u).pathname.replace(/^\/|\/$/g, '');
+      const urlObj = new URL(u);
+      if (!urlObj.hostname.includes('shopee.')) return false;
+      const p = urlObj.pathname.replace(/^\/|\/$/g, '');
       const reserved = ['cart', 'user', 'buyer', 'checkout', 'daily_discover', 'flash_sale', 'top_products', 'm', 'portal', 'api', 'help'];
       return p.length > 0 && !reserved.includes(p.split('/')[0]);
     } catch (e) {

@@ -297,12 +297,14 @@ var ShopeeDB = (typeof ShopeeDB !== 'undefined' && ShopeeDB) ? ShopeeDB : (funct
              'Terjual / Bulan' + T +
              'Omset Quick' + T +
              'Omset Detail' + T +
+             'Top Keluhan' + T +
              'Toko' + T +
              'Lokasi' + T +
              'URL Produk' + T +
              'Waktu Scraping' + N;
 
       (records || []).forEach((r, idx) => {
+        const topPain = r.output?.review_insights?.pain_points?.[0]?.label || '-';
         tsv += (idx + 1) + T +
                esc(r.name) + T +
                (r.price_min || 0) + T +
@@ -312,6 +314,7 @@ var ShopeeDB = (typeof ShopeeDB !== 'undefined' && ShopeeDB) ? ShopeeDB : (funct
                (r.monthly_sold || 0) + T +
                (r.omset_quick || 0) + T +
                (r.omset_detail || 0) + T +
+               esc(topPain) + T +
                esc(r.shop_name) + T +
                esc(r.shop_location) + T +
                esc(r.url) + T +
@@ -324,10 +327,11 @@ var ShopeeDB = (typeof ShopeeDB !== 'undefined' && ShopeeDB) ? ShopeeDB : (funct
     buildBulkCSV(records) {
       const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
 
-      let csv = 'No,Nama Produk,Harga Min,Harga Max,Rating,Total Terjual,Terjual / Bulan,Omset Quick,Omset Detail,Toko,Lokasi,URL Produk,Waktu Scraping\n';
+      let csv = 'No,Nama Produk,Harga Min,Harga Max,Rating,Total Terjual,Terjual / Bulan,Omset Quick,Omset Detail,Top Keluhan,Toko,Lokasi,URL Produk,Waktu Scraping\n';
 
       (records || []).forEach((r, idx) => {
-        csv += `${idx + 1},${esc(r.name)},${r.price_min || 0},${r.price_max || 0},${r.rating || 0},${r.total_sold || 0},${r.monthly_sold || 0},${r.omset_quick || 0},${r.omset_detail || 0},${esc(r.shop_name)},${esc(r.shop_location)},${esc(r.url)},${esc(r.scraped_at)}\n`;
+        const topPain = r.output?.review_insights?.pain_points?.[0]?.label || '-';
+        csv += `${idx + 1},${esc(r.name)},${r.price_min || 0},${r.price_max || 0},${r.rating || 0},${r.total_sold || 0},${r.monthly_sold || 0},${r.omset_quick || 0},${r.omset_detail || 0},${esc(topPain)},${esc(r.shop_name)},${esc(r.shop_location)},${esc(r.url)},${esc(r.scraped_at)}\n`;
       });
 
       return '\uFEFF' + csv;

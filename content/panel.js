@@ -10,12 +10,12 @@
 
 /** Cek URL halaman produk Shopee */
 function isShopeeProductPage(url) {
-  return /shopee\.co\.id\/.+-i\.\d+\.\d+/.test(url || location.href) || /shopee\.co\.id\/product\/\d+\/\d+/.test(url || location.href);
+  return /shopee\.[a-z.]+\/.+-i\.\d+\.\d+/.test(url || location.href) || /shopee\.[a-z.]+\/product\/\d+\/\d+/.test(url || location.href);
 }
 
 /** Cek URL halaman pencarian Shopee */
 function isShopeeSearchPage(url) {
-  return /shopee\.co\.id\/search/.test(url || location.href);
+  return /shopee\.[a-z.]+\/search/.test(url || location.href);
 }
 
 /** Cek URL halaman etalase toko Shopee */
@@ -23,7 +23,9 @@ function isShopeeShopPage(url) {
   const u = url || location.href;
   if (isShopeeProductPage(u) || isShopeeSearchPage(u)) return false;
   try {
-    const p = new URL(u).pathname.replace(/^\/|\/$/g, '');
+    const urlObj = new URL(u);
+    if (!urlObj.hostname.includes('shopee.')) return false;
+    const p = urlObj.pathname.replace(/^\/|\/$/g, '');
     const reserved = ['cart', 'user', 'buyer', 'checkout', 'daily_discover', 'flash_sale', 'top_products', 'm', 'portal', 'api', 'help'];
     return p.length > 0 && !reserved.includes(p.split('/')[0]);
   } catch(e) {
@@ -37,10 +39,26 @@ function isSupportedShopeePage(url) {
   return isShopeeProductPage(u) || isShopeeSearchPage(u) || isShopeeShopPage(u);
 }
 
-function formatRupiah(num) {
+function getCurrencySymbol(urlOrHost) {
+  const h = (urlOrHost || location.href || '').toLowerCase();
+  if (h.includes('.sg')) return 'S$';
+  if (h.includes('.com.my') || h.includes('.my')) return 'RM';
+  if (h.includes('.ph')) return '₱';
+  if (h.includes('.co.th') || h.includes('.th')) return '฿';
+  if (h.includes('.vn')) return '₫';
+  if (h.includes('.tw')) return 'NT$';
+  if (h.includes('.com.br') || h.includes('.br')) return 'R$';
+  if (h.includes('.com.mx') || h.includes('.mx')) return 'MX$';
+  if (h.includes('.com.co') || h.includes('.co')) return 'COL$';
+  if (h.includes('.cl')) return 'CL$';
+  return 'Rp';
+}
+
+function formatRupiah(num, urlOrHost) {
   if (num === null || num === undefined) return '-';
+  const sym = getCurrencySymbol(urlOrHost);
   const n = Number(num) || 0;
-  return 'Rp' + n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return sym + ' ' + n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
 
 function escapeHTML(str) {
@@ -105,6 +123,18 @@ function buildCSV(output) {
     csv += 'Tidak ada review yang sesuai filter\n';
   }
 
+  if (output.review_insights && (output.review_insights.pain_points?.length || output.review_insights.top_complaint_words?.length)) {
+    const ri = output.review_insights;
+    csv += '\n=== INSIGHT KELUHAN PEMBELI ===\n';
+    csv += 'Kategori Keluhan,Jumlah Terdeteksi,Persentase\n';
+    (ri.pain_points || []).forEach(p => {
+      csv += `"${(p.label || '').replace(/"/g, '""')}",${p.count},${p.percentage}%\n`;
+    });
+    if (ri.top_complaint_words?.length) {
+      csv += `"Top Kata Kunci Keluhan","${ri.top_complaint_words.map(w => `${w.word} (${w.count}x)`).join(', ')}"\n`;
+    }
+  }
+
   return '\uFEFF' + csv; // BOM untuk Excel
 }
 
@@ -165,6 +195,18 @@ function buildTSV(output) {
     reviewData.forEach(r => {
       tsv += (r.stars || '') + T + esc(r.date) + T + esc(r.user) + T + esc(r.variant || '-') + T + esc(r.comment) + N;
     });
+  }
+
+  if (output.review_insights && (output.review_insights.pain_points?.length || output.review_insights.top_complaint_words?.length)) {
+    const ri = output.review_insights;
+    tsv += N + '=== INSIGHT KELUHAN PEMBELI ===' + N;
+    tsv += 'Kategori Keluhan' + T + 'Jumlah' + T + 'Persentase' + N;
+    (ri.pain_points || []).forEach(p => {
+      tsv += esc(p.label) + T + p.count + T + p.percentage + '%' + N;
+    });
+    if (ri.top_complaint_words?.length) {
+      tsv += N + 'Top Kata Kunci Keluhan' + T + ri.top_complaint_words.map(w => `${w.word} (${w.count}x)`).join(', ') + N;
+    }
   }
 
   return tsv;
@@ -749,6 +791,32 @@ function createPanel() {
           </div>
         </div>
 
+        <!-- Review Insights (Analisis Keluhan Pembeli) -->
+        <div class="section-title">
+          <span>💡 Insight Keluhan Pembeli</span>
+          <span class="badge" id="insightBadge" style="display:none; background:#722ed1;">0 Keluhan</span>
+        </div>
+        <div id="insightWrap" class="muted">Belum ada data ulasan untuk dianalisis</div>
+        <div id="insightContentWrap" style="display:none; margin-bottom:12px;">
+          <!-- Sentimen bar -->
+          <div style="background:#f5f5f5; border-radius:6px; padding:6px 8px; margin-bottom:8px; border:1px solid #e8e8e8;">
+            <div style="display:flex; justify-content:space-between; font-size:10px; margin-bottom:4px;">
+              <span>Sentimen Ulasan:</span>
+              <span id="sentimentRate" style="font-weight:700; color:#2e7d32;">0% Positif</span>
+            </div>
+            <div style="height:6px; background:#ff4d4f; border-radius:3px; overflow:hidden;">
+              <div id="sentimentBar" style="height:100%; width:100%; background:#52c41a;"></div>
+            </div>
+          </div>
+
+          <!-- Top Pain Points list -->
+          <div id="painPointsList" style="display:flex; flex-direction:column; gap:4px; margin-bottom:8px;"></div>
+
+          <!-- Cloud kata kunci keluhan -->
+          <div style="font-size:9.5px; color:#888; margin-bottom:4px; font-weight:700;">Top Kata Kunci Keluhan:</div>
+          <div id="complaintWordsCloud" style="display:flex; flex-wrap:wrap; gap:4px;"></div>
+        </div>
+
         <!-- Review Terfilter -->
         <div class="section-title">
           <span id="reviewSectionTitle">📋 Review Terfilter</span>
@@ -1072,6 +1140,61 @@ function render(shadow, output) {
           ${shop.is_mall ? 'Mall' : shop.is_preferred ? 'Star+' : 'Regular'}
         </td></tr>
       `;
+    }
+  }
+
+  // ── Review Insights (Analisis Keluhan Pembeli) ──
+  const insightWrap = shadow.getElementById('insightWrap');
+  const insightContentWrap = shadow.getElementById('insightContentWrap');
+  const insightBadge = shadow.getElementById('insightBadge');
+  const sentimentRate = shadow.getElementById('sentimentRate');
+  const sentimentBar = shadow.getElementById('sentimentBar');
+  const painPointsList = shadow.getElementById('painPointsList');
+  const complaintWordsCloud = shadow.getElementById('complaintWordsCloud');
+
+  const insights = output.review_insights;
+  if (!insights || insights.total_analyzed === 0 || (!insights.pain_points?.length && !insights.top_complaint_words?.length)) {
+    if (insightWrap) insightWrap.style.display = 'block';
+    if (insightContentWrap) insightContentWrap.style.display = 'none';
+    if (insightBadge) insightBadge.style.display = 'none';
+  } else {
+    if (insightWrap) insightWrap.style.display = 'none';
+    if (insightContentWrap) insightContentWrap.style.display = 'block';
+
+    const totalPainPointsCount = (insights.pain_points || []).reduce((sum, p) => sum + p.count, 0);
+    if (insightBadge) {
+      insightBadge.textContent = `${totalPainPointsCount} Keluhan`;
+      insightBadge.style.display = 'inline';
+    }
+
+    if (sentimentRate && sentimentBar) {
+      const posRate = insights.sentiment?.positive_rate ?? 100;
+      sentimentRate.textContent = `${posRate}% Positif | ${100 - posRate}% Keluhan`;
+      sentimentBar.style.width = `${posRate}%`;
+    }
+
+    if (painPointsList) {
+      let ppHtml = '';
+      (insights.pain_points || []).forEach(p => {
+        ppHtml += `
+          <div style="background:#fff; border:1px solid #ffd591; border-radius:5px; padding:5px 8px; font-size:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+              <span style="font-weight:700; color:#d4380d;">${p.icon} ${escapeHTML(p.label)}</span>
+              <span style="background:#fff2e8; color:#d4380d; font-weight:800; font-size:9px; padding:1px 5px; border-radius:10px; border:1px solid #ffbb96;">${p.count}x (${p.percentage}%)</span>
+            </div>
+            ${p.sample ? `<div style="font-size:9px; color:#666; font-style:italic;">"${escapeHTML(p.sample)}"</div>` : ''}
+          </div>
+        `;
+      });
+      painPointsList.innerHTML = ppHtml;
+    }
+
+    if (complaintWordsCloud) {
+      let wordsHtml = '';
+      (insights.top_complaint_words || []).forEach(w => {
+        wordsHtml += `<span style="background:#fff1f0; border:1px solid #ffa39e; color:#cf1322; padding:2px 6px; border-radius:10px; font-size:9.5px; font-weight:600;">#${escapeHTML(w.word)} (${w.count})</span>`;
+      });
+      complaintWordsCloud.innerHTML = wordsHtml || '<span style="color:#aaa; font-size:9.5px;">-</span>';
     }
   }
 

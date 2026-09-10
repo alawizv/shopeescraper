@@ -14,6 +14,16 @@
   ],
   "host_permissions": [
     "https://*.shopee.co.id/*",
+    "https://*.shopee.sg/*",
+    "https://*.shopee.com.my/*",
+    "https://*.shopee.ph/*",
+    "https://*.shopee.co.th/*",
+    "https://*.shopee.vn/*",
+    "https://*.shopee.tw/*",
+    "https://*.shopee.com.br/*",
+    "https://*.shopee.com.mx/*",
+    "https://*.shopee.com.co/*",
+    "https://*.shopee.cl/*",
     "https://raw.githubusercontent.com/*"
   ],
   "background": {
@@ -21,12 +31,36 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://*.shopee.co.id/*"],
+      "matches": [
+        "https://*.shopee.co.id/*",
+        "https://*.shopee.sg/*",
+        "https://*.shopee.com.my/*",
+        "https://*.shopee.ph/*",
+        "https://*.shopee.co.th/*",
+        "https://*.shopee.vn/*",
+        "https://*.shopee.tw/*",
+        "https://*.shopee.com.br/*",
+        "https://*.shopee.com.mx/*",
+        "https://*.shopee.com.co/*",
+        "https://*.shopee.cl/*"
+      ],
       "js": ["content/injector.js"],
       "run_at": "document_start"
     },
     {
-      "matches": ["https://*.shopee.co.id/*"],
+      "matches": [
+        "https://*.shopee.co.id/*",
+        "https://*.shopee.sg/*",
+        "https://*.shopee.com.my/*",
+        "https://*.shopee.ph/*",
+        "https://*.shopee.co.th/*",
+        "https://*.shopee.vn/*",
+        "https://*.shopee.tw/*",
+        "https://*.shopee.com.br/*",
+        "https://*.shopee.com.mx/*",
+        "https://*.shopee.com.co/*",
+        "https://*.shopee.cl/*"
+      ],
       "js": ["utils/db.js", "utils/parser.js", "content/panel.js"],
       "run_at": "document_end"
     }
@@ -53,7 +87,19 @@
   "web_accessible_resources": [
     {
       "resources": ["content/interceptor.js"],
-      "matches": ["https://*.shopee.co.id/*"]
+      "matches": [
+        "https://*.shopee.co.id/*",
+        "https://*.shopee.sg/*",
+        "https://*.shopee.com.my/*",
+        "https://*.shopee.ph/*",
+        "https://*.shopee.co.th/*",
+        "https://*.shopee.vn/*",
+        "https://*.shopee.tw/*",
+        "https://*.shopee.com.br/*",
+        "https://*.shopee.com.mx/*",
+        "https://*.shopee.com.co/*",
+        "https://*.shopee.cl/*"
+      ]
     }
   ]
 }

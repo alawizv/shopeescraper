@@ -301,6 +301,34 @@
           </div>
         </section>
 
+        <!-- Review Insights (Analisis Keluhan Pembeli) -->
+        <section class="section" id="review-insights-section">
+          <h2 class="section-title">
+            <span>💡 Insight Keluhan Pembeli</span>
+            <span id="insight-badge" class="badge" style="font-size:9px; background:#722ed1; color:white; padding:2px 6px; border-radius:8px; display:none;">0 Keluhan</span>
+          </h2>
+          <p class="empty-text" id="no-insight-text">Belum ada data ulasan untuk dianalisis.</p>
+          <div id="insight-content-wrapper" class="d-none">
+            <!-- Sentiment bar -->
+            <div class="sentiment-box">
+              <div class="sentiment-label">
+                <span>Sentimen Ulasan:</span>
+                <span id="popup-sentiment-rate" class="sentiment-rate-val">0% Positif</span>
+              </div>
+              <div class="sentiment-track">
+                <div id="popup-sentiment-bar" class="sentiment-bar-fill"></div>
+              </div>
+            </div>
+
+            <!-- Pain Points List -->
+            <div id="popup-pain-points" class="pain-points-wrap"></div>
+
+            <!-- Top Words Cloud -->
+            <div class="complaint-cloud-title">Top Kata Kunci Keluhan:</div>
+            <div id="popup-complaint-words" class="complaint-words-cloud"></div>
+          </div>
+        </section>
+
         <!-- Daftar Review Terfilter -->
         <section class="section" id="review-list-section">
           <h2 class="section-title">

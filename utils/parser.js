@@ -572,6 +572,167 @@ var ShopeeParser = (typeof ShopeeParser !== 'undefined' && ShopeeParser) ? Shope
   },
 
   /**
+   * Dapatkan simbol mata uang berdasarkan URL atau host Shopee
+   */
+  getCurrencySymbol(url) {
+    const h = (url || '').toLowerCase();
+    if (h.includes('.sg')) return 'S$';
+    if (h.includes('.com.my') || h.includes('.my')) return 'RM';
+    if (h.includes('.ph')) return '₱';
+    if (h.includes('.co.th') || h.includes('.th')) return '฿';
+    if (h.includes('.vn')) return '₫';
+    if (h.includes('.tw')) return 'NT$';
+    if (h.includes('.com.br') || h.includes('.br')) return 'R$';
+    if (h.includes('.com.mx') || h.includes('.mx')) return 'MX$';
+    if (h.includes('.com.co') || h.includes('.co')) return 'COL$';
+    if (h.includes('.cl')) return 'CL$';
+    return 'Rp';
+  },
+
+  /**
+   * Ekstrak insight ulasan pembeli (Pain Points & Analisis Keluhan)
+   * Mengelompokkan keluhan utama pembeli ke dalam kategori spesifik dan kata kunci teratas.
+   */
+  extractReviewInsights(reviews) {
+    if (!reviews || !Array.isArray(reviews) || reviews.length === 0) {
+      return {
+        total_analyzed: 0,
+        sentiment: { positive_count: 0, negative_count: 0, positive_rate: 100 },
+        pain_points: [],
+        top_complaint_words: []
+      };
+    }
+
+    const categories = [
+      {
+        id: 'kualitas',
+        label: 'Kualitas Bahan / Produk Kurang',
+        icon: '🧵',
+        keywords: ['tipis', 'jelek', 'kualitas', 'kasar', 'panas', 'nerawang', 'murahan', 'gatal', 'bau', 'kotor', 'kusam', 'buruk', 'luntur', 'gampang rusak', 'mudah sobek', 'ringkih', 'abal', 'jelek banget', 'tipis banget'],
+        count: 0,
+        samples: []
+      },
+      {
+        id: 'kerusakan',
+        label: 'Barang Rusak / Cacat Fisik',
+        icon: '💔',
+        keywords: ['rusak', 'pecah', 'patah', 'retak', 'cacat', 'sobek', 'bolong', 'jahitan', 'copot', 'bocor', 'hancur', 'penyok', 'tergores', 'lepas', 'remuk', 'robek'],
+        count: 0,
+        samples: []
+      },
+      {
+        id: 'ukuran',
+        label: 'Ukuran / Fitting Tidak Sesuai',
+        icon: '📏',
+        keywords: ['kekecilan', 'kebesaran', 'sempit', 'panjang', 'pendek', 'gak muat', 'tidak muat', 'salah ukuran', 'size', 'ketat', 'longgar', 'muat', 'kurang besar'],
+        count: 0,
+        samples: []
+      },
+      {
+        id: 'pengiriman',
+        label: 'Pengiriman / Kurir Lambat',
+        icon: '🚚',
+        keywords: ['lama', 'lelet', 'pengiriman', 'kurir', 'lambat', 'telat', 'nunggu', 'berhari-hari', 'packing', 'kemasan', 'lama banget', 'pending', 'paket'],
+        count: 0,
+        samples: []
+      },
+      {
+        id: 'ketidaksesuaian',
+        label: 'Tidak Sesuai Foto / Pesanan',
+        icon: '📸',
+        keywords: ['tidak sesuai', 'beda', 'kecewa', 'salah kirim', 'salah warna', 'kurang', 'gak lengkap', 'tidak lengkap', 'zonk', 'tertipu', 'lain', 'palsu', 'kw', 'beda warna', 'gak sama'],
+        count: 0,
+        samples: []
+      },
+      {
+        id: 'fungsi',
+        label: 'Fungsi / Performa Bermasalah',
+        icon: '⚙️',
+        keywords: ['mati', 'tidak berfungsi', 'gak nyala', 'error', 'tidak bisa', 'baterai', 'bocor', 'rusak', 'macet', 'mati total', 'bunyi'],
+        count: 0,
+        samples: []
+      }
+    ];
+
+    const stopwords = new Set([
+      'dan', 'yang', 'ini', 'itu', 'di', 'ke', 'dari', 'aku', 'saya', 'kamu', 'dia', 'mereka',
+      'ada', 'tidak', 'gak', 'nggak', 'tak', 'udah', 'sudah', 'belum', 'bisa', 'karena', 'tapi',
+      'tp', 'yg', 'nya', 'untuk', 'pada', 'dengan', 'adalah', 'akan', 'juga', 'bgt', 'banget',
+      'aja', 'saja', 'buat', 'mau', 'harus', 'jadi', 'lagi', 'kok', 'pas', 'sih',
+      'dong', 'lah', 'kan', 'deh', 'ya', 'yaa', 'nih', 'kalo', 'kalau', 'sama', 'agak', 'terus',
+      'lebih', 'malah', 'bukan', 'padahal', 'minta', 'beli', 'pesan', 'order', 'barang',
+      'produk', 'shopee', 'seller', 'toko', 'terima', 'kasih', 'bagus'
+    ]);
+
+    let positiveCount = 0;
+    let negativeCount = 0;
+    const wordFreq = {};
+
+    reviews.forEach(r => {
+      const stars = Number(r.stars) || 5;
+      if (stars >= 4) positiveCount++;
+      else negativeCount++;
+
+      const comment = (r.comment || '').toLowerCase();
+      if (!comment) return;
+
+      categories.forEach(cat => {
+        const matched = cat.keywords.some(kw => comment.includes(kw));
+        if (matched) {
+          cat.count++;
+          if (cat.samples.length < 2) {
+            cat.samples.push(r.comment.slice(0, 80) + (r.comment.length > 80 ? '...' : ''));
+          }
+        }
+      });
+
+      if (stars <= 3) {
+        const words = comment.replace(/[^a-z0-9\s-]/g, ' ').split(/\s+/);
+        words.forEach(w => {
+          const word = w.trim();
+          if (word.length >= 4 && !stopwords.has(word) && !/^\d+$/.test(word)) {
+            wordFreq[word] = (wordFreq[word] || 0) + 1;
+          }
+        });
+      }
+    });
+
+    const totalAnalyzed = reviews.length;
+    const totalComplaints = categories.reduce((sum, c) => sum + c.count, 0);
+
+    const activePainPoints = categories
+      .filter(c => c.count > 0)
+      .sort((a, b) => b.count - a.count)
+      .map(c => ({
+        id: c.id,
+        icon: c.icon,
+        label: c.label,
+        count: c.count,
+        percentage: totalComplaints > 0 ? Math.round((c.count / totalComplaints) * 100) : 0,
+        sample: c.samples[0] || null
+      }));
+
+    const topWords = Object.keys(wordFreq)
+      .map(w => ({ word: w, count: wordFreq[w] }))
+      .filter(w => w.count >= 2)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+
+    const positiveRate = totalAnalyzed > 0 ? Math.round((positiveCount / totalAnalyzed) * 100) : 100;
+
+    return {
+      total_analyzed: totalAnalyzed,
+      sentiment: {
+        positive_count: positiveCount,
+        negative_count: negativeCount,
+        positive_rate: positiveRate
+      },
+      pain_points: activePainPoints,
+      top_complaint_words: topWords
+    };
+  },
+
+  /**
    * Ekstrak shopid dan itemid dari URL produk Shopee
    */
   _extractIdFromUrl(url) {
@@ -716,7 +877,9 @@ var ShopeeParser = (typeof ShopeeParser !== 'undefined' && ShopeeParser) ? Shope
       star_filter_label: starFilterLabel,
       star_filter_label_short: starFilterLabelShort,
       filtered_reviews: negativeReviews || [], // Nama lebih netral (bukan hanya 'negatif')
-      negative_reviews: negativeReviews || []  // Tetap ada untuk backward compatibility
+      negative_reviews: negativeReviews || [], // Tetap ada untuk backward compatibility
+      currency_symbol: this.getCurrencySymbol(url),
+      review_insights: this.extractReviewInsights(negativeReviews)
     };
   }
 };
