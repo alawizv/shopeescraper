@@ -1,0 +1,89 @@
+﻿name: Auto Bump Version
+
+# Jalankan setiap push ke main
+# KECUALI commit dari bot ini sendiri (cegah infinite loop)
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'version.json'
+      - 'manifest.json'
+      - '.github/**'
+      - 'README.md'
+      - 'install-update.bat'
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+
+    # Jangan jalan kalau commit-nya dari GitHub Actions sendiri
+    if: "!startsWith(github.event.head_commit.message, 'chore(version)')"
+
+    permissions:
+      contents: write   # Perlu untuk push balik ke repo
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Baca versi saat ini dari manifest.json
+        id: current_version
+        run: |
+          VERSION=$(python3 -c "import json; d=json.load(open('manifest.json')); print(d['version'])")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Versi saat ini: $VERSION"
+
+      - name: Hitung versi baru (bump patch)
+        id: new_version
+        run: |
+          IFS='.' read -ra PARTS <<< "${{ steps.current_version.outputs.version }}"
+          MAJOR=${PARTS[0]}
+          MINOR=${PARTS[1]}
+          PATCH=${PARTS[2]}
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "Versi baru: $NEW_VERSION"
+
+      - name: Update manifest.json
+        run: |
+          NEW_VERSION="${{ steps.new_version.outputs.version }}"
+          python3 -c "
+          import json
+          with open('manifest.json', 'r', encoding='utf-8') as f:
+              data = json.load(f)
+          data['version'] = '$NEW_VERSION'
+          with open('manifest.json', 'w', encoding='utf-8') as f:
+              json.dump(data, f, indent=2, ensure_ascii=False)
+              f.write('\n')
+          print(f'manifest.json updated to {NEW_VERSION}')
+          "
+
+      - name: Update version.json
+        run: |
+          NEW_VERSION="${{ steps.new_version.outputs.version }}"
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          python3 -c "
+          import json, sys
+          new_version = '$NEW_VERSION'
+          changelog = '$COMMIT_MSG'.split('\n')[0]  # Ambil baris pertama commit message
+          # Bersihkan karakter yang bisa rusak JSON
+          changelog = changelog.replace(\"'\", '').replace('\\\\', '')
+          data = {'version': new_version, 'changelog': changelog}
+          with open('version.json', 'w', encoding='utf-8') as f:
+              json.dump(data, f, indent=2, ensure_ascii=False)
+              f.write('\n')
+          print(f'version.json updated: {new_version}')
+          "
+
+      - name: Commit & push version bump
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add manifest.json version.json
+          git commit -m "chore(version): bump ke ${{ steps.new_version.outputs.version }} [skip ci]"
+          git push
+          echo "Version bump selesai: ${{ steps.current_version.outputs.version }} → ${{ steps.new_version.outputs.version }}"
