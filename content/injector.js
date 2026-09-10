@@ -43,6 +43,16 @@
   let fallbackTimer = null;
   const FALLBACK_TIMEOUT = 8000; // 8 detik tunggu API, lalu fallback
 
+  // Helper deduplikasi ulasan universal (anti double-read/double-count)
+  function getReviewDedupeKey(r) {
+    if (!r) return '';
+    return String(
+      r.rating_id ||
+      r.cmnt_id ||
+      `comp:${r.author_username || r.username || r.user || 'anon'}_${(r.comment || r.content || '').slice(0, 40)}_${r.ctime || r.create_time || r.date || ''}_${r.rating_star || r.star || r.rating || ''}`
+    );
+  }
+
   // ========================================
   // 1. Inject interceptor.js ke page context
   // ========================================
@@ -1429,9 +1439,9 @@
         if (ratings.length === 0) break;
 
         ratings.forEach(r => {
-          const id = r.rating_id || r.cmnt_id;
-          if (!id || !seenIds.has(id)) {
-            if (id) seenIds.add(id);
+          const id = getReviewDedupeKey(r);
+          if (id && !seenIds.has(id)) {
+            seenIds.add(id);
             allReviews.push(r);
           }
         });
@@ -1518,10 +1528,6 @@
       await new Promise(r => setTimeout(r, step));
       waited += step;
     }
-  }
-
-  function getReviewDedupeKey(r) {
-    return String(r.rating_id || r.cmnt_id || `${r.author_username || r.username || 'anon'}_${(r.comment || r.content || '').slice(0, 30)}_${r.ctime || r.rating_star || ''}`);
   }
 
     // === Tahap 0: Seed dari interceptor (ulasan yang sudah ditangkap saat page-load) ===
@@ -1949,9 +1955,9 @@
           if (ratings.length === 0) break;
 
           ratings.forEach(r => {
-            const id = r.rating_id || r.cmnt_id;
-            if (!id || !seenIds.has(id)) {
-              if (id) seenIds.add(id);
+            const id = getReviewDedupeKey(r);
+            if (id && !seenIds.has(id)) {
+              seenIds.add(id);
               allReviews.push(r);
             }
           });
@@ -2052,7 +2058,7 @@
 
            // Masukkan format palsu mirip API agar bisa dipompa ke parser
            allReviews.push({
-              rating_id: Math.random().toString(36).substr(2, 9),
+              rating_id: `dom_${author}_${variation}_${stars}_${comment.slice(0, 40)}`,
               rating_star: stars,
               variation: variation,
               comment: comment,

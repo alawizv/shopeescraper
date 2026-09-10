@@ -334,12 +334,14 @@ var ShopeeParser = (typeof ShopeeParser !== 'undefined' && ShopeeParser) ? Shope
       if (!Array.isArray(ratings)) return;
 
       ratings.forEach(review => {
-        // Hindari duplikasi penghitungan varian dari ulasan yang sama akibat pagination Fetch
-        const reviewId = review.rating_id || review.cmnt_id;
-        if (reviewId) {
-            if (seenKeys.has(reviewId)) return;
-            seenKeys.add(reviewId);
-        }
+        // Hindari duplikasi penghitungan ulasan & varian: cek rating_id / cmnt_id / composite key (anti double-count)
+        const reviewKey = String(
+          review.rating_id ||
+          review.cmnt_id ||
+          `comp:${review.author_username || review.username || review.user || 'anon'}_${(review.comment || review.content || '').slice(0, 40)}_${review.ctime || review.create_time || review.date || ''}_${review.rating_star || review.star || review.rating || ''}`
+        );
+        if (seenKeys.has(reviewKey)) return;
+        seenKeys.add(reviewKey);
 
         // Dihitung untuk SEMUA ulasan unik — bukan hanya yang punya info varian.
         // Kalau tidak, produk tanpa varian selalu melaporkan "0 ulasan ter-scrape".
@@ -430,15 +432,6 @@ var ShopeeParser = (typeof ShopeeParser !== 'undefined' && ShopeeParser) ? Shope
         const date = timestamp
           ? new Date(timestamp * 1000).toISOString().split('T')[0]
           : 'Tidak diketahui';
-
-        // Dedupe sekunder hanya bila timestamp valid. Pada fallback DOM murni
-        // timestamp selalu 0, sehingga kunci "User_0" akan membuang semua ulasan
-        // selain yang pertama.
-        if (timestamp > 0) {
-          const dedupeKey = `u:${user}_${timestamp}`;
-          if (seenKeys.has(dedupeKey)) return;
-          seenKeys.add(dedupeKey);
-        }
 
         allReviews.push({
           stars: stars,
