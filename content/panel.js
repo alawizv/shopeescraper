@@ -164,6 +164,17 @@ function createPanel() {
 
       @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
 
+      .btn-icon {
+        background: rgba(255,255,255,.18);
+        border: 1px solid rgba(255,255,255,.28);
+        color: #fff;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 4px 8px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background .15s;
+      }
       .btn-icon:hover { background: rgba(255,255,255,.35); }
 
       .body {
@@ -221,28 +232,6 @@ function createPanel() {
         margin: 4px 0 0 0;
         padding-left: 16px;
       }
-
-      .row { margin-bottom: 10px; }
-      .label { font-size: 10px; color: #888; font-weight: 800; letter-spacing: .3px; text-transform: uppercase; }
-      .value { font-size: 12px; color: #222; margin-top: 3px; line-height: 1.35; }
-
-      .grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-        margin-top: 8px;
-        margin-bottom: 10px;
-      }
-
-      .card {
-        background: #fafafa;
-        border: 1px solid #eee;
-        border-radius: 10px;
-        padding: 8px;
-        text-align: center;
-      }
-      .card .k { font-size: 10px; color: #999; font-weight: 800; text-transform: uppercase; }
-      .card .v { font-size: 14px; font-weight: 900; color: #ee4d2d; margin-top: 4px; }
 
       .actions {
         display: flex;
@@ -703,8 +692,8 @@ function render(shadow, output) {
       negRevs.forEach(r => {
         html += `
           <tr>
-            <td style="color:#ee4d2d; font-weight:bold;">${r.stars}</td>
-            <td style="font-size:9.5px;">${escapeHTML(r.user)}<br><span style="color:#999;font-size:8px;">${r.date}</span></td>
+            <td style="color:#ee4d2d; font-weight:bold;">${escapeHTML(String(r.stars ?? '-'))}</td>
+            <td style="font-size:9.5px;">${escapeHTML(r.user)}<br><span style="color:#999;font-size:8px;">${escapeHTML(r.date)}</span></td>
             <td style="font-size:10px; line-height:1.3;">${escapeHTML(r.comment)}</td>
           </tr>
         `;
@@ -817,8 +806,8 @@ function makeDraggable(host, handle) {
   document.addEventListener('mouseup', () => { isDragging = false; });
 }
 
-// ── MAIN ──
-(async function main() {
+// ── MOUNT PANEL ──
+async function mountPanel() {
   // Cegah double inject
   if (document.getElementById('shopee-scraper-panel-host')) return;
 
@@ -944,7 +933,9 @@ function makeDraggable(host, handle) {
     });
     const product = ShopeeParser.parseProduct(saved.rawProduct);
     const neg = ShopeeParser.parseNegativeReviews(saved.rawReviews || [], product?.variants || [], sfJSON);
-    const output = ShopeeParser.buildOutput(product, neg, saved.url || location.href, saved.rawShop || null, null, sfJSON);
+    // monthlySoldFromSearch harus ikut dikirim — kalau null, data "Terjual/Bulan"
+    // yang tampil di panel hilang dari file hasil export.
+    const output = ShopeeParser.buildOutput(product, neg, saved.url || location.href, saved.rawShop || null, saved.monthlySoldFromSearch || null, sfJSON);
     const blob = new Blob([JSON.stringify(output, null, 2)], { type: 'application/json' });
     downloadBlob(blob, `shopee_${Date.now()}.json`);
   });
@@ -962,24 +953,60 @@ function makeDraggable(host, handle) {
     });
     const product = ShopeeParser.parseProduct(saved.rawProduct);
     const neg = ShopeeParser.parseNegativeReviews(saved.rawReviews || [], product?.variants || [], sfCSV);
-    const output = ShopeeParser.buildOutput(product, neg, saved.url || location.href, saved.rawShop || null, null, sfCSV);
+    const output = ShopeeParser.buildOutput(product, neg, saved.url || location.href, saved.rawShop || null, saved.monthlySoldFromSearch || null, sfCSV);
     const blob = new Blob([buildCSV(output)], { type: 'text/csv;charset=utf-8;' });
     downloadBlob(blob, `shopee_${Date.now()}.csv`);
   });
 
+  // Shadow aktif dipakai listener storage global di bawah
+  activeShadow = shadow;
+
   // ── Render awal ──
   await refreshFromStorage(shadow);
+}
 
-  // ── Auto update saat storage berubah (intercept / DOM fallback selesai) ──
-  chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName !== 'local') return;
-    if (!isShopeeProductPage(location.href)) return; // Abaikan jika pindah halaman non-produk (SPA)
-    if (changes.shopeeScraperData) refreshFromStorage(shadow);
-  });
+// Shadow root panel yang sedang terpasang (null saat panel tidak ada)
+let activeShadow = null;
 
-  // ── Deteksi pindah produk (Shopee SPA) ──
-  // (Dinonaktifkan demi stabilitas: Auto-scrape per detik 
-  // sangat rawan menimbulkan Extension context invalidated 
-  // ketika pengguna berpindah tab/reload)
-  
+// ── Auto update saat storage berubah (intercept / DOM fallback selesai) ──
+// Didaftarkan SEKALI di level modul. Kalau didaftarkan di dalam mountPanel(),
+// listener akan menumpuk setiap kali user berpindah produk lewat navigasi SPA.
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'local') return;
+  if (!changes.shopeeScraperData) return;
+  if (!isShopeeProductPage(location.href)) return; // Abaikan jika pindah halaman non-produk (SPA)
+  if (!activeShadow || !document.getElementById('shopee-scraper-panel-host')) return;
+  refreshFromStorage(activeShadow);
+});
+
+// ── Deteksi navigasi SPA Shopee ──
+// Panel hanya dipasang saat halaman produk. Tanpa pengawas ini, user yang
+// membuka Shopee dari halaman non-produk (beranda/pencarian) lalu masuk ke
+// halaman produk tidak akan pernah melihat panel, karena content script hanya
+// dievaluasi sekali di document_end.
+// Catatan: yang diawasi hanya pemasangan/pelepasan panel — TIDAK ada auto-scrape
+// per detik, agar tidak memicu "Extension context invalidated".
+(function watchSpaNavigation() {
+  let lastUrl = location.href;
+
+  const syncPanelWithUrl = () => {
+    const existingHost = document.getElementById('shopee-scraper-panel-host');
+
+    if (isShopeeProductPage(location.href)) {
+      if (!existingHost) mountPanel();
+    } else if (existingHost) {
+      // Pindah ke halaman non-produk — lepas panel agar tidak menampilkan data basi
+      existingHost.remove();
+      activeShadow = null;
+    }
+  };
+
+  setInterval(() => {
+    if (location.href !== lastUrl) {
+      lastUrl = location.href;
+      syncPanelWithUrl();
+    }
+  }, 1000);
+
+  syncPanelWithUrl();
 })();

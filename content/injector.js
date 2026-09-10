@@ -13,6 +13,18 @@
   'use strict';
 
   // ========================================
+  // 0. Guard anti double-inject
+  // ========================================
+  // popup.js dapat menyuntik ulang file ini via chrome.scripting.executeScript.
+  // Tanpa penjaga ini, listener onMessage, MutationObserver, dan interval SPA
+  // akan terdaftar dua kali dan saling menimpa state review.
+  if (window.__SHOPEE_SCRAPER_INJECTOR_READY__) {
+    console.log('[Shopee Scraper] Injector sudah aktif di tab ini, inject ulang diabaikan.');
+    return;
+  }
+  window.__SHOPEE_SCRAPER_INJECTOR_READY__ = true;
+
+  // ========================================
   // State untuk menyimpan data yang ter-intercept
   // ========================================
   let interceptedData = {
@@ -74,10 +86,13 @@
         interceptedData.product = data;
         interceptedData.dataSource = 'api';
         clearFallbackTimer();
-        // Simpan ke storage langsung
+        // Simpan ke storage langsung agar panel/popup tidak menunggu auto-fetch review.
+        // autoFetchReviews() bisa return lebih awal (bukan PDP, ID gagal diekstrak,
+        // review sudah ada), jadi penyimpanan tidak boleh bergantung padanya.
+        saveDataToStorage();
         // Setelah 5 detik, auto-fetch review via direct API (tanpa pagination/scroll)
         setTimeout(() => autoFetchReviews(), 5000);
-        
+
         // Auto-fetch shop detail dinonaktifkan agar bisa di-trigger via tombol manual "Muat Info Terjual & Toko"
         break;
 
@@ -399,6 +414,11 @@
         }
       }
 
+      // Teks yang dipakai untuk pencarian regex.
+      // Dibatasi ke area info produk agar tidak menangkap angka dari daftar
+      // produk rekomendasi / "Produk Serupa" di bagian bawah halaman.
+      const scopeText = getProductScopeText();
+
       // === Total terjual ===
       const soldSelectors = [
         'div[class*="product-briefing"] span[class*="sold"]',
@@ -417,9 +437,8 @@
       }
 
       if (totalSold === 0) {
-        const allText = document.body.innerText;
         // Penyesuaian regex untuk tipe "10RB+ Terjual", "10 RB Terjual"
-        const soldMatch = allText.match(/(\d[\d.,]*)\s*(RB|rb|K|k|Ribu|ribu)?\s*\+?\s*[Tt]erjual/);
+        const soldMatch = scopeText.match(/(\d[\d.,]*)\s*(RB|rb|K|k|Ribu|ribu)?\s*\+?\s*[Tt]erjual/);
         if (soldMatch) {
           totalSold = extractNumber(soldMatch[0]);
         }
@@ -446,16 +465,15 @@
         }
       }
 
-      // Fallback: cari teks "XX Penilaian" atau "XX Ulasan" di halaman
+      // Fallback: cari teks "XX Penilaian" atau "XX Ulasan" di area produk
       if (reviewCount === 0) {
-        const allText = document.body.innerText;
         // Tangkap misalnya "20RB Penilaian" atau "1K+ Penilaian"
-        const reviewMatch = allText.match(/(\d[\d.,]*)\s*(RB|rb|K|k|Ribu|ribu)?\s*\+?\s*[Pp]enilaian/);
+        const reviewMatch = scopeText.match(/(\d[\d.,]*)\s*(RB|rb|K|k|Ribu|ribu)?\s*\+?\s*[Pp]enilaian/);
         if (reviewMatch) {
           reviewCount = extractNumber(reviewMatch[0]);
         }
         if (reviewCount === 0) {
-          const ulasanMatch = allText.match(/(\d[\d.,]*)\s*(RB|rb|K|k|Ribu|ribu)?\s*\+?\s*[Uu]lasan/);
+          const ulasanMatch = scopeText.match(/(\d[\d.,]*)\s*(RB|rb|K|k|Ribu|ribu)?\s*\+?\s*[Uu]lasan/);
           if (ulasanMatch) {
             reviewCount = extractNumber(ulasanMatch[0]);
           }
@@ -471,8 +489,8 @@
       ];
 
       let soldPerMonth = 0;
-      // Cari teks "X Terjual / Bulan" di seluruh body jika selector spesifik gagal
-      const monthlyMatch = document.body.innerText.match(/(\d[\d.,]*)\s*(RB|rb|K|k|Ribu|ribu)?\s*\+?\s*[Tt]erjual\s*\/\s*[Bb]ulan/);
+      // Cari teks "X Terjual / Bulan" di area produk jika selector spesifik gagal
+      const monthlyMatch = scopeText.match(/(\d[\d.,]*)\s*(RB|rb|K|k|Ribu|ribu)?\s*\+?\s*[Tt]erjual\s*\/\s*[Bb]ulan/);
       if (monthlyMatch) {
          soldPerMonth = extractNumber(monthlyMatch[0]);
       }
@@ -687,6 +705,43 @@
   }
 
   /**
+   * Ambil teks dari area info produk saja (bukan seluruh body).
+   * Bagian bawah PDP Shopee berisi "Produk Serupa" / rekomendasi yang juga
+   * memuat teks "Terjual" dan "Penilaian", sehingga regex atas seluruh body
+   * bisa mengambil angka milik produk lain.
+   */
+  function getProductScopeText() {
+    const scopeSelectors = [
+      'div[class*="product-briefing"]',
+      'section[class*="page-product"] > div:first-child',
+      'div[class*="pdp-main"]',
+      'div[class*="product-detail"]'
+    ];
+
+    let scoped = '';
+    for (const sel of scopeSelectors) {
+      const el = document.querySelector(sel);
+      const text = el && (el.innerText || el.textContent || '').trim();
+      if (text) { scoped = text; break; }
+    }
+
+    // Teks body dipotong pada penanda section rekomendasi
+    const bodyText = (document.body && document.body.innerText) || '';
+    const cutMarkers = ['Produk Serupa', 'Produk Terkait', 'Anda Mungkin Juga Suka', 'Produk Lainnya Dari Toko Ini'];
+    let cutAt = bodyText.length;
+    cutMarkers.forEach(marker => {
+      const idx = bodyText.indexOf(marker);
+      if (idx > 0 && idx < cutAt) cutAt = idx;
+    });
+    const trimmedBody = bodyText.slice(0, cutAt);
+
+    // Gabungkan dengan area produk di DEPAN: String.match() mengambil kecocokan
+    // pertama, jadi angka milik produk utama menang. Teks body yang sudah
+    // dipotong tetap disertakan sebagai cadangan bila area produk tidak memuatnya.
+    return scoped ? `${scoped}\n${trimmedBody}` : trimmedBody;
+  }
+
+  /**
    * Ekstrak angka harga dari teks
    */
   function extractPrices(text) {
@@ -813,22 +868,46 @@
         timestamp: new Date().toISOString()
       };
 
+      const notifyUpdated = (payload) => {
+        try {
+          chrome.runtime.sendMessage({
+            action: 'DATA_UPDATED',
+            data: payload
+          }).catch(() => {
+            // Popup mungkin belum terbuka — abaikan error
+          });
+        } catch (e) { /* extension context invalidated */ }
+      };
+
       chrome.storage.local.set({ shopeeScraperData: dataToSave }, () => {
         if (chrome.runtime.lastError) {
-          console.warn('[Shopee Scraper] Storage set error:', chrome.runtime.lastError);
+          const msg = chrome.runtime.lastError.message || '';
+          console.warn('[Shopee Scraper] Storage set error:', msg);
+
+          // Kuota terlampaui: simpan ulang tanpa review mentah agar data produk,
+          // toko, dan status tetap sampai ke panel/popup (jangan gagal diam-diam).
+          if (/quota|QUOTA/i.test(msg)) {
+            const trimmed = {
+              ...dataToSave,
+              rawReviews: [],
+              fetchStatus: `${interceptedData.fetchStatus || 'done:0'}`,
+              storageTrimmed: true
+            };
+            chrome.storage.local.set({ shopeeScraperData: trimmed }, () => {
+              if (chrome.runtime.lastError) {
+                console.error('[Shopee Scraper] Storage tetap gagal setelah dipangkas:', chrome.runtime.lastError.message);
+                return;
+              }
+              console.warn('[Shopee Scraper] ⚠️ Kuota storage penuh — review mentah tidak ikut disimpan.');
+              notifyUpdated(trimmed);
+            });
+          }
           return;
         }
         console.log('[Shopee Scraper] Data disimpan ke storage');
 
         // Beritahu popup/background bahwa data tersedia
-        try {
-          chrome.runtime.sendMessage({
-            action: 'DATA_UPDATED',
-            data: dataToSave
-          }).catch(() => {
-            // Popup mungkin belum terbuka — abaikan error
-          });
-        } catch(e) {}
+        notifyUpdated(dataToSave);
       });
     } catch (e) {
       console.warn('[Shopee Scraper] Gagal menyimpan data:', e.message);
@@ -1195,6 +1274,7 @@
     let retryCount = 0;
     const maxRetries = 3;
     let page = 0;
+    let lastProgressSave = 0;
 
     // Set loading status
     interceptedData.fetchStatus = 'auto_loading:0';
@@ -1244,7 +1324,9 @@
         page++;
 
         // Progressive save setiap 100 review
-        if (allReviews.length % 100 < limit) {
+        // (pakai selisih, bukan modulo — modulo bisa terpicu beberapa kali beruntun)
+        if (allReviews.length - lastProgressSave >= 100) {
+          lastProgressSave = allReviews.length;
           interceptedData.reviews = [{ data: { ratings: allReviews } }];
           interceptedData.fetchStatus = `auto_loading:${allReviews.length}`;
           saveDataToStorage();
@@ -1352,8 +1434,13 @@
 
       if (allReviews.length < targetScraped && !window.CS_SHOPEE_STOP_FLAG) {
       console.log('%c[Shopee Scraper V3] 📜 Scroll ke bagian review + simulasi pagination...', 'background: teal; color: white;');
-      let paginationRounds = 0;
+      let paginationRounds = 0;      // jumlah halaman yang benar-benar menghasilkan review
+      let paginationAttempts = 0;    // jumlah putaran loop (naik selalu, jadi loop pasti berhenti)
+      let emptyStreak = 0;           // putaran beruntun tanpa review baru
       const MAX_PAGINATION_ROUNDS = 3000; // Maks 3000 halaman klik (sekitar 18000 review)
+      const MAX_PAGINATION_ATTEMPTS = MAX_PAGINATION_ROUNDS + 50;
+      const MAX_EMPTY_STREAK = 5;    // menyerah setelah 5 klik beruntun tanpa data baru
+      let lastProgressSave = 0;
       let currentFilterTabIndex = 0; // Mulai dari tab "Semua" (index 0)
         
         try {
@@ -1376,7 +1463,8 @@
         await new Promise(r => setTimeout(r, 2000));
 
         // Loop klik tombol "next page" dan tunggu interceptor menangkap hasilnya
-        while (paginationRounds < MAX_PAGINATION_ROUNDS) {
+        while (paginationRounds < MAX_PAGINATION_ROUNDS && paginationAttempts < MAX_PAGINATION_ATTEMPTS) {
+          paginationAttempts++; // selalu naik — mencegah loop tak berujung saat klik berhasil tapi tidak ada data
           let clicked = false;
           let targetBtn = null;
           
@@ -1600,12 +1688,12 @@
 
           if (captured > 0) {
             paginationRounds++;
+            emptyStreak = 0;
             const coverage = totalReviewsOfficial > 0 ? ((allReviews.length / totalReviewsOfficial) * 100).toFixed(1) : '?';
             console.log(`[Shopee Scraper V3] 📄 Halaman ${paginationRounds}: +${captured} review, total: ${allReviews.length} (${coverage}%)`);
-            
+
             // Progressive save setiap 100 review
-            if (typeof lastProgressSave === 'undefined') var lastProgressSave = 0;
-            if (allReviews.length - (lastProgressSave || 0) >= 100) {
+            if (allReviews.length - lastProgressSave >= 100) {
               lastProgressSave = allReviews.length;
               interceptedData.reviews = [{ data: { ratings: allReviews } }];
               interceptedData.fetchStatus = `loading:${allReviews.length}`;
@@ -1613,16 +1701,28 @@
               interceptedData.reviews = []; // Reset lagi setelah save
               console.log(`%c[Shopee Scraper V3] 💾 Progressive save: ${allReviews.length}`, 'background: teal; color: white;');
             }
+          } else {
+            // Klik berhasil tapi tidak ada review baru — jangan berputar selamanya
+            emptyStreak++;
+            console.log(`[Shopee Scraper V3] ⏳ Tidak ada review baru setelah klik (${emptyStreak}/${MAX_EMPTY_STREAK}).`);
+            if (emptyStreak >= MAX_EMPTY_STREAK) {
+              console.log(`%c[Shopee Scraper V3] 🏁 ${MAX_EMPTY_STREAK}× klik beruntun tanpa data baru. Menghentikan pagination.`, 'background: orange; color: black;');
+              break;
+            }
           }
-          
+
           // Berhenti jika sudah mencapai target atau STOP ditekan
           if (allReviews.length >= targetScraped || window.CS_SHOPEE_STOP_FLAG) {
             console.log(`%c[Shopee Scraper V3] 🎯 Target tercapai atau STOP ditekan (${allReviews.length} dari ${totalReviewsOfficial}). Menghentikan klik next!`, 'background: green; color: white; font-weight: bold;');
             break;
           }
-          
+
           if (paginationRounds >= MAX_PAGINATION_ROUNDS) {
             console.log(`[Shopee Scraper V3] ⚠️ Mencapai batas ${MAX_PAGINATION_ROUNDS} halaman.`);
+            break;
+          }
+          if (paginationAttempts >= MAX_PAGINATION_ATTEMPTS) {
+            console.log(`[Shopee Scraper V3] ⚠️ Mencapai batas ${MAX_PAGINATION_ATTEMPTS} percobaan klik.`);
             break;
           }
         }
@@ -1630,7 +1730,7 @@
         console.warn('[Shopee Scraper V3] Pagination simulation error:', e);
       }
     } else {
-      console.log(`%c[Shopee Scraper V3] 🎯 Cakupan 30% sudah terpenuhi (${allReviews.length} review). Skip pagination.`, 'background: green; color: white; font-weight: bold;');
+      console.log(`%c[Shopee Scraper V3] 🎯 Target cakupan sudah terpenuhi atau STOP aktif (${allReviews.length} review). Skip pagination.`, 'background: green; color: white; font-weight: bold;');
     }
 
     // === Tahap 1: Jika pagination tidak berhasil, coba direct API dengan limit konservatif ===
@@ -1803,9 +1903,6 @@
   // 7. Inisialisasi
   // ========================================
   function init() {
-    console.log('[Shopee Scraper] Injector dimulai, inject interceptor selalu aktif untuk SPA...');
-    injectInterceptor();
-
     if (checkIsProductPage()) {
       console.log('[Shopee Scraper] Halaman produk terdeteksi di awal, memulai...');
       startFallbackTimer();
@@ -1820,13 +1917,28 @@
             console.log('[Shopee Scraper] Navigasi SPA ke PDP terdeteksi, restart intercept/fallback...');
             interceptedData.product = null;
             interceptedData.reviews = [];
+            interceptedData.shop = null;
             interceptedData.dataSource = 'none';
             interceptedData.fetchStatus = null;
+            window.CS_SHOPEE_STOP_FLAG = true; // hentikan loop scrape produk sebelumnya
+            // Kosongkan storage agar panel tidak menampilkan data produk lama
+            try {
+              chrome.storage.local.set({ shopeeScraperData: null }, () => {
+                void chrome.runtime.lastError;
+              });
+            } catch (e) { /* extension context invalidated */ }
+            setTimeout(() => { window.CS_SHOPEE_STOP_FLAG = false; }, 1000);
             startFallbackTimer();
          }
       }
     }, 1000);
   }
+
+  // Interceptor HARUS di-inject sinkron saat script dievaluasi (run_at: document_start).
+  // Menundanya sampai DOMContentLoaded membuat request API awal Shopee terlewat,
+  // sehingga data produk tidak pernah tertangkap dan selalu jatuh ke fallback DOM.
+  console.log('[Shopee Scraper] Injector dimulai, inject interceptor selalu aktif untuk SPA...');
+  injectInterceptor();
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);

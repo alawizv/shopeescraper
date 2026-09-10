@@ -214,6 +214,23 @@
         </div>
       </section>
 
+      <!-- Daftar Review Terfilter -->
+      <section class="section" id="review-list-section">
+        <h2 class="section-title">
+          <span id="review-list-title">📋 Review Terfilter</span>
+          <span id="review-list-count" class="badge" style="font-size:9px; background:#ee4d2d; color:white; padding:2px 6px; border-radius:8px;">0</span>
+        </h2>
+        <p class="empty-text" id="no-review-list">Belum ada review yang sesuai filter (min. 10 kata).</p>
+        <div id="review-list-wrapper" class="d-none" style="max-height:220px; overflow-y:auto;">
+          <table class="data-table" id="review-list-table">
+            <thead>
+              <tr><th style="width:32px;">⭐</th><th style="width:90px;">User</th><th>Komentar</th></tr>
+            </thead>
+            <tbody id="review-list-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- Export -->
       <section class="section export-section">
         <h2 class="section-title">📤 Export Data</h2>

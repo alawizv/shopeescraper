@@ -57,14 +57,14 @@ const ShopeeExporter = {
       csvContent += '\n';
     }
 
-    if (data.trend) {
-      csvContent += '=== TREND 30 HARI ===\n';
-      csvContent += 'Field,Value\n';
-      csvContent += `Omset / Bulan,${data.trend.omset_per_month || 0}\n`;
-      csvContent += `Omset 30 hari,${data.trend.omset_30_days || 0}\n`;
-      csvContent += `Terjual / Bulan,${data.trend.sold_per_month || 0}\n`;
-      csvContent += `Penjualan 30 hari,${data.trend.sold_30_days || 0}\n`;
-      csvContent += `Trend Percentage,${data.trend.trend_percentage || 0}%\n`;
+    // Section omset/trend — sumbernya data.omset dari buildOutput
+    // (dulu membaca data.trend yang tidak pernah dihasilkan parser, jadi selalu kosong)
+    const trendRows = this._buildTrendRows(data);
+    if (trendRows.length > 1) {
+      csvContent += '=== OMSET & TREND 30 HARI ===\n';
+      trendRows.forEach(row => {
+        csvContent += `${row[0]},"${this._escapeCSV(String(row[1] ?? ''))}"\n`;
+      });
       csvContent += '\n';
     }
 
@@ -160,6 +160,12 @@ const ShopeeExporter = {
   async _createSpreadsheet(token, data) {
     const dateStr = this._getDateString();
     const title = `Shopee Scraper - ${dateStr}`;
+    const reviewSheetName = data.star_filter_label_short ? `Reviews (${data.star_filter_label_short})` : 'Reviews';
+
+    // Sheet baru default hanya 1000 baris dan values.update TIDAK memperluas grid,
+    // jadi ukuran sheet review harus dipesan sesuai jumlah data.
+    const reviewRowCount = this._gridRowCount((data.filtered_reviews || data.negative_reviews || []).length + 1);
+    const variantRowCount = this._gridRowCount((data.variants || []).length + 1);
 
     const createResponse = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
       method: 'POST',
@@ -172,8 +178,8 @@ const ShopeeExporter = {
         sheets: [
           { properties: { title: 'Product Info' } },
           { properties: { title: 'Trend' } },
-          { properties: { title: 'Variants' } },
-          { properties: { title: data.star_filter_label_short ? `Reviews (${data.star_filter_label_short})` : 'Reviews' } }
+          { properties: { title: 'Variants', gridProperties: { rowCount: variantRowCount, columnCount: 26 } } },
+          { properties: { title: reviewSheetName, gridProperties: { rowCount: reviewRowCount, columnCount: 26 } } }
         ]
       })
     });
@@ -189,9 +195,16 @@ const ShopeeExporter = {
     await this._writeProductInfo(token, spreadsheetId, data);
     await this._writeSheetData(token, spreadsheetId, 'Trend', this._buildTrendRows(data));
     await this._writeVariants(token, spreadsheetId, data);
-    await this._writeNegativeReviews(token, spreadsheetId, data, data.star_filter_label_short ? `Reviews (${data.star_filter_label_short})` : 'Reviews');
+    await this._writeNegativeReviews(token, spreadsheetId, data, reviewSheetName);
 
     return spreadsheetId;
+  },
+
+  /**
+   * Jumlah baris grid yang perlu dipesan untuk sebuah sheet (minimal 1000)
+   */
+  _gridRowCount(neededRows) {
+    return Math.max(1000, (neededRows || 0) + 50);
   },
 
   /**
@@ -200,6 +213,12 @@ const ShopeeExporter = {
   async _appendToSpreadsheet(token, spreadsheetId, data) {
     const dateStr = this._getDateString();
     const sheetTitle = `Scrape ${dateStr}`;
+    // Nama sheet review harus dihitung SEBELUM addSheet — sebelumnya sheet dibuat
+    // dengan nama "... - Reviews" tapi penulisan diarahkan ke "... - Reviews (5★)",
+    // sehingga data review tidak pernah sampai.
+    const reviewSheetTitle = data.star_filter_label_short
+      ? `${sheetTitle} - Reviews (${data.star_filter_label_short})`
+      : `${sheetTitle} - Reviews`;
 
     const batchResp = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
@@ -213,8 +232,8 @@ const ShopeeExporter = {
           requests: [
             { addSheet: { properties: { title: `${sheetTitle} - Product` } } },
             { addSheet: { properties: { title: `${sheetTitle} - Trend` } } },
-            { addSheet: { properties: { title: `${sheetTitle} - Variants` } } },
-            { addSheet: { properties: { title: `${sheetTitle} - Reviews` } } }
+            { addSheet: { properties: { title: `${sheetTitle} - Variants`, gridProperties: { rowCount: this._gridRowCount((data.variants || []).length + 1), columnCount: 26 } } } },
+            { addSheet: { properties: { title: reviewSheetTitle, gridProperties: { rowCount: this._gridRowCount((data.filtered_reviews || data.negative_reviews || []).length + 1), columnCount: 26 } } } }
           ]
         })
       }
@@ -228,7 +247,6 @@ const ShopeeExporter = {
     await this._writeSheetData(token, spreadsheetId, `${sheetTitle} - Product`, this._buildProductRows(data));
     await this._writeSheetData(token, spreadsheetId, `${sheetTitle} - Trend`, this._buildTrendRows(data));
     await this._writeSheetData(token, spreadsheetId, `${sheetTitle} - Variants`, this._buildVariantRows(data));
-    const reviewSheetTitle = data.star_filter_label_short ? `${sheetTitle} - Reviews (${data.star_filter_label_short})` : `${sheetTitle} - Reviews`;
     await this._writeSheetData(token, spreadsheetId, reviewSheetTitle, this._buildReviewRows(data));
   },
 
@@ -259,14 +277,34 @@ const ShopeeExporter = {
   },
 
   _buildTrendRows(data) {
-    if (!data.trend) return [['Trend data not available', '']];
+    // buildOutput() menghasilkan `omset` dan `monthly_sold`, bukan `trend`.
+    // `data.trend` tetap didukung untuk data lama yang mungkin masih tersimpan.
+    if (data.trend) {
+      return [
+        ['Field', 'Value'],
+        ['Omset / Bulan', data.trend.omset_per_month || 0],
+        ['Omset 30 hari', data.trend.omset_30_days || 0],
+        ['Terjual / Bulan', data.trend.sold_per_month || 0],
+        ['Penjualan 30 hari', data.trend.sold_30_days || 0],
+        ['Trend Percentage (%)', data.trend.trend_percentage || 0]
+      ];
+    }
+
+    const o = data.omset;
+    const m = data.monthly_sold || {};
+    if (!o) return [['Data omset belum tersedia', '']];
+
     return [
       ['Field', 'Value'],
-      ['Omset / Bulan', data.trend.omset_per_month || 0],
-      ['Omset 30 hari', data.trend.omset_30_days || 0],
-      ['Terjual / Bulan', data.trend.sold_per_month || 0],
-      ['Penjualan 30 hari', data.trend.sold_30_days || 0],
-      ['Trend Percentage (%)', data.trend.trend_percentage || 0]
+      ['Omset / Bulan (Quick)', o.quick_value || 0],
+      ['Omset 30 Hari (Detail)', o.detail_value || 0],
+      ['Terjual / Bulan', o.sold_per_month || 0],
+      ['Sumber Terjual / Bulan', o.sold_per_month_source || m.source || '-'],
+      ['Harga Rata-rata', o.avg_price || 0],
+      ['Review dalam 30 Hari', o.reviews_30d || 0],
+      ['Review 30 Hari dengan Harga Varian', o.reviews_30d_with_price || 0],
+      ['Omset dari Review (sebelum koreksi)', o.omset_from_reviews || 0],
+      ['Faktor Koreksi', o.correction_factor || 0]
     ];
   },
 
@@ -307,7 +345,9 @@ const ShopeeExporter = {
     const range = `'${sheetName}'!A1`;
 
     const response = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+      // RAW, bukan USER_ENTERED: komentar review yang diawali "=", "+", "-", atau "@"
+      // akan dieksekusi sebagai formula spreadsheet kalau memakai USER_ENTERED.
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
       {
         method: 'PUT',
         headers: {
@@ -324,7 +364,9 @@ const ShopeeExporter = {
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error(`[Shopee Exporter] Gagal menulis ke sheet "${sheetName}":`, errText);
+      // Harus melempar: kalau ditelan, export dilaporkan sukses padahal
+      // spreadsheet yang dibuka user kosong.
+      throw new Error(`Gagal menulis ke sheet "${sheetName}": ${errText}`);
     }
   },
 
@@ -343,8 +385,9 @@ const ShopeeExporter = {
   },
 
   _escapeCSV(str) {
-    if (!str) return '';
-    return str.replace(/"/g, '""').replace(/\n/g, ' ').replace(/\r/g, '');
+    if (str === null || str === undefined) return '';
+    // Terima angka/boolean juga — dulu .replace() akan melempar untuk non-string
+    return String(str).replace(/"/g, '""').replace(/\n/g, ' ').replace(/\r/g, '');
   },
 
   _getDateString() {

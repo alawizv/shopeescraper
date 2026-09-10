@@ -76,6 +76,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
  */
 async function handleGoogleSheetsExport(data) {
   try {
+    assertOAuthConfigured();
+
     const token = await new Promise((resolve, reject) => {
       chrome.identity.getAuthToken({ interactive: true }, (token) => {
         if (chrome.runtime.lastError) {
@@ -121,6 +123,32 @@ async function handleGoogleSheetsExport(data) {
   }
 }
 
+/**
+ * Pastikan client_id OAuth sudah diisi di manifest.
+ * Tanpa ini, chrome.identity hanya melempar error generik yang membingungkan.
+ */
+function assertOAuthConfigured() {
+  const clientId = chrome.runtime.getManifest()?.oauth2?.client_id || '';
+  if (!clientId || clientId.startsWith('GANTI_DENGAN')) {
+    throw new Error(
+      'Client ID Google belum dikonfigurasi. Isi kolom "oauth2.client_id" di manifest.json ' +
+      'dengan OAuth Client ID (tipe Chrome Extension) dari Google Cloud Console.'
+    );
+  }
+}
+
+/**
+ * Jumlah baris grid yang perlu dipesan (sheet baru default 1000 baris dan
+ * values.update tidak memperluas grid secara otomatis)
+ */
+function gridRowCount(neededRows) {
+  return Math.max(1000, (neededRows || 0) + 50);
+}
+
+function reviewListOf(data) {
+  return data.filtered_reviews || data.negative_reviews || [];
+}
+
 async function createNewSpreadsheet(token, data, dateStr) {
   const title = `Shopee Scraper - ${dateStr}`;
 
@@ -136,8 +164,8 @@ async function createNewSpreadsheet(token, data, dateStr) {
         { properties: { title: 'Product Info' } },
         { properties: { title: 'Shop Info' } },
         { properties: { title: 'Trend' } },
-        { properties: { title: 'Variants' } },
-        { properties: { title: 'Negative Reviews' } }
+        { properties: { title: 'Variants', gridProperties: { rowCount: gridRowCount((data.variants || []).length + 1), columnCount: 26 } } },
+        { properties: { title: 'Negative Reviews', gridProperties: { rowCount: gridRowCount(reviewListOf(data).length + 1), columnCount: 26 } } }
       ]
     })
   });
@@ -170,8 +198,8 @@ async function appendToExistingSheet(token, spreadsheetId, data, dateStr) {
         { addSheet: { properties: { title: `${prefix} - Product` } } },
         { addSheet: { properties: { title: `${prefix} - Shop` } } },
         { addSheet: { properties: { title: `${prefix} - Trend` } } },
-        { addSheet: { properties: { title: `${prefix} - Variants` } } },
-        { addSheet: { properties: { title: `${prefix} - Reviews` } } }
+        { addSheet: { properties: { title: `${prefix} - Variants`, gridProperties: { rowCount: gridRowCount((data.variants || []).length + 1), columnCount: 26 } } } },
+        { addSheet: { properties: { title: `${prefix} - Reviews`, gridProperties: { rowCount: gridRowCount(reviewListOf(data).length + 1), columnCount: 26 } } } }
       ]
     })
   });
@@ -192,7 +220,9 @@ async function writeToSheet(token, spreadsheetId, sheetName, rows) {
   const range = `'${sheetName}'!A1`;
 
   const resp = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+    // RAW, bukan USER_ENTERED: komentar review yang diawali "=", "+", "-", atau "@"
+    // akan dieksekusi sebagai formula spreadsheet kalau memakai USER_ENTERED.
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
     {
       method: 'PUT',
       headers: {
@@ -218,6 +248,8 @@ function buildProductRows(data) {
     ['Rating', data.product?.rating || 0],
     ['Total Terjual', data.product?.total_sold || 0],
     ['Jumlah Ulasan', data.product?.review_count || 0],
+    ['Terjual / Bulan', data.monthly_sold?.value || 0],
+    ['Sumber Terjual / Bulan', data.monthly_sold?.source || '-'],
     ['URL', data.url || ''],
     ['Waktu Scraping', data.scraped_at || '']
   ];
@@ -239,14 +271,34 @@ function buildShopRows(data) {
 }
 
 function buildTrendRows(data) {
-  if (!data.trend) return [['Trend data not available', '']];
+  // buildOutput() menghasilkan `omset` dan `monthly_sold`, bukan `trend`.
+  // `data.trend` tetap didukung untuk data lama yang mungkin masih tersimpan.
+  if (data.trend) {
+    return [
+      ['Field', 'Value'],
+      ['Omset / Bulan', data.trend.omset_per_month || 0],
+      ['Omset 30 hari', data.trend.omset_30_days || 0],
+      ['Terjual / Bulan', data.trend.sold_per_month || 0],
+      ['Penjualan 30 hari', data.trend.sold_30_days || 0],
+      ['Trend Percentage (%)', data.trend.trend_percentage || 0]
+    ];
+  }
+
+  const o = data.omset;
+  const m = data.monthly_sold || {};
+  if (!o) return [['Data omset belum tersedia', '']];
+
   return [
     ['Field', 'Value'],
-    ['Omset / Bulan', data.trend.omset_per_month || 0],
-    ['Omset 30 hari', data.trend.omset_30_days || 0],
-    ['Terjual / Bulan', data.trend.sold_per_month || 0],
-    ['Penjualan 30 hari', data.trend.sold_30_days || 0],
-    ['Trend Percentage (%)', data.trend.trend_percentage || 0]
+    ['Omset / Bulan (Quick)', o.quick_value || 0],
+    ['Omset 30 Hari (Detail)', o.detail_value || 0],
+    ['Terjual / Bulan', o.sold_per_month || 0],
+    ['Sumber Terjual / Bulan', o.sold_per_month_source || m.source || '-'],
+    ['Harga Rata-rata', o.avg_price || 0],
+    ['Review dalam 30 Hari', o.reviews_30d || 0],
+    ['Review 30 Hari dengan Harga Varian', o.reviews_30d_with_price || 0],
+    ['Omset dari Review (sebelum koreksi)', o.omset_from_reviews || 0],
+    ['Faktor Koreksi', o.correction_factor || 0]
   ];
 }
 
@@ -264,12 +316,14 @@ function buildVariantRows(data) {
 
 function buildReviewRows(data) {
   const rows = [['Bintang', 'Komentar', 'Tanggal', 'Username', 'Varian']];
-  if (data.negative_reviews?.length > 0) {
-    data.negative_reviews.forEach(r => {
-      rows.push([r.stars, r.comment || '', r.date || '', r.user || '', r.variant || '-']);
+  // Gunakan filtered_reviews (baru) dengan fallback ke negative_reviews (lama)
+  const reviewData = reviewListOf(data);
+  if (reviewData.length > 0) {
+    reviewData.forEach(r => {
+      rows.push([r.stars ?? 0, r.comment || '', r.date || '', r.user || '', r.variant || '-']);
     });
   } else {
-    rows.push(['Tidak ada review negatif', '', '', '', '']);
+    rows.push(['Tidak ada review yang sesuai filter', '', '', '', '']);
   }
   return rows;
 }

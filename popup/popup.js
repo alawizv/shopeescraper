@@ -16,7 +16,7 @@
   // ========================================
   let currentData = null;
   let parsedProduct = null;
-  let negativeReviews = [];
+  let lastRawData = null; // data mentah terakhir, dipakai untuk render ulang saat filter berubah
   let currentStarFilter = [1, 2, 3, 4, 5]; // Default: semua bintang
 
   // ========================================
@@ -145,7 +145,10 @@
   async function checkStorageFallback(currentUrl) {
       hideLoading();
       const storageData = await getFromStorage('shopeeScraperData');
-      if (storageData && storageData.rawProduct && storageData.url && currentUrl.includes(extractProductSlug(storageData.url))) {
+      // Slug wajib tidak kosong: String.includes('') selalu true, sehingga slug
+      // kosong akan membuat data produk LAIN ditampilkan sebagai halaman aktif.
+      const savedSlug = extractProductSlug(storageData?.url);
+      if (storageData && storageData.rawProduct && savedSlug && currentUrl.includes(savedSlug)) {
         processRawData(storageData);
       } else {
         setStatus('error', 'Gagal memuat');
@@ -165,6 +168,10 @@
         saveStarFilter(currentStarFilter);
         updateStarFilterNote(currentStarFilter);
         updateReviewFilterBadge(currentStarFilter);
+
+        // Bangun ulang data dengan filter baru. Tanpa ini, tombol export masih
+        // memakai currentData hasil filter LAMA sampai user scrape ulang.
+        if (lastRawData) processRawData(lastRawData);
       });
     });
 
@@ -310,6 +317,7 @@
     try {
       console.log('[Popup] Memproses data mentah...');
 
+      lastRawData = rawData; // disimpan agar filter bintang bisa render ulang tanpa scrape
       parsedProduct = ShopeeParser.parseProduct(rawData.rawProduct);
 
       if (!parsedProduct) {
@@ -321,7 +329,6 @@
 
       // parseNegativeReviews sekarang menerima starFilter sebagai parameter ketiga
       const parsedReviews = ShopeeParser.parseNegativeReviews(rawData.rawReviews || [], parsedProduct?.variants || [], currentStarFilter);
-      negativeReviews = parsedReviews;
 
       currentData = ShopeeParser.buildOutput(
         parsedProduct,
@@ -337,6 +344,7 @@
       renderMonthlySales(parsedProduct, rawData);
       renderShopInfo(currentData.shop || null);
       renderVariants(currentData.variants || [], currentData.tierSummaries || []);
+      renderReviewList(currentData.filtered_reviews || currentData.negative_reviews || []);
 
       const source = rawData.dataSource === 'api' ? 'API' : rawData.dataSource === 'api+dom' ? 'API+DOM' : 'DOM';
       setStatus('success', `Data dari ${source}`);
@@ -477,6 +485,46 @@
         ? 'data-source-badge active'
         : 'data-source-badge';
     }
+  }
+
+  /**
+   * Render daftar review yang lolos filter bintang
+   */
+  function renderReviewList(reviews) {
+    const wrapper = document.getElementById('review-list-wrapper');
+    const emptyText = document.getElementById('no-review-list');
+    const tbody = document.getElementById('review-list-tbody');
+    const countBadge = document.getElementById('review-list-count');
+    const title = document.getElementById('review-list-title');
+    if (!wrapper || !tbody) return;
+
+    if (countBadge) countBadge.textContent = reviews.length;
+    if (title) {
+      title.textContent = (currentStarFilter.length === 5)
+        ? '📋 Review Terfilter'
+        : `📋 Review (${[...currentStarFilter].sort((a, b) => b - a).map(s => `${s}★`).join('+')})`;
+    }
+
+    if (!reviews.length) {
+      if (emptyText) emptyText.classList.remove('d-none');
+      wrapper.classList.add('d-none');
+      tbody.innerHTML = '';
+      return;
+    }
+
+    if (emptyText) emptyText.classList.add('d-none');
+    wrapper.classList.remove('d-none');
+
+    tbody.innerHTML = '';
+    reviews.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="color:#ee4d2d; font-weight:700;">${escapeHTML(String(r.stars ?? '-'))}</td>
+        <td style="font-size:10px;">${escapeHTML(r.user || '-')}<br><span style="color:#999; font-size:9px;">${escapeHTML(r.date || '')}</span></td>
+        <td style="font-size:10px; line-height:1.35;">${escapeHTML(r.comment || '')}</td>
+      `;
+      tbody.appendChild(tr);
+    });
   }
 
   /**

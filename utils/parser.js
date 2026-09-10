@@ -5,7 +5,10 @@
  * menjadi format standar yang digunakan oleh popup dan exporter.
  */
 
-const ShopeeParser = {
+// Dideklarasikan dengan `var` + penjaga, bukan `const`: popup.js bisa menyuntik
+// ulang file ini via chrome.scripting.executeScript, dan `const` yang dideklarasikan
+// dua kali di scope yang sama melempar SyntaxError sehingga inject ulang gagal total.
+var ShopeeParser = (typeof ShopeeParser !== 'undefined' && ShopeeParser) ? ShopeeParser : {
 
   /**
    * Parse data produk dari response API Shopee
@@ -291,14 +294,22 @@ const ShopeeParser = {
     }
     
     // Tahap 1 & 2: Reset Tracking dan Inisiasi Proxy
+    // PENTING: sold_count hasil _parseVariants bisa berasal dari API models
+    // (model.historical_sold). Angka itu harus diselamatkan dulu ke _api_sold_count,
+    // kalau tidak ia terhapus di sini dan perhitungan "sumber api_model" di bawah
+    // jadi memakai angka nol.
     if (variantsArray) {
         variantsArray.forEach(v => {
+            if (v._api_sold_count === undefined) {
+                v._api_sold_count = (v._source_sold === 'api_model') ? (v.sold_count || 0) : 0;
+            }
             v.sold_count = 0;
-            v._isReviewProxy = true; // Penanda khusus bahwa data ini murni dari ulasan
+            v._isReviewProxy = true; // Sementara; di-set ulang di bawah jika data API dipakai
         });
     }
-    
-    let totalReviewsParsed = 0;
+
+    let totalReviewsParsed = 0;   // semua ulasan unik yang diproses (untuk statistik sampel)
+    let variantReviewTotal = 0;   // ulasan yang membawa info varian (penyebut persentase proxy)
     const reviewVariantsCount = {}; // V1 Logic Proxy Tracker
 
     // Tracking untuk kalkulasi omset 30 hari
@@ -330,8 +341,12 @@ const ShopeeParser = {
             seenKeys.add(reviewId);
         }
 
+        // Dihitung untuk SEMUA ulasan unik — bukan hanya yang punya info varian.
+        // Kalau tidak, produk tanpa varian selalu melaporkan "0 ulasan ter-scrape".
+        totalReviewsParsed++;
+
         const stars = review.rating_star || review.star || review.rating || 0;
-        
+
         // Tahap 2: Menggali Informasi Varian dari Komentar (product_items[0].model_name)
         const productItems = review.product_items || [];
         const variantPurchased = productItems.length > 0
@@ -344,8 +359,8 @@ const ShopeeParser = {
 
         let matchedPrice = 0;
         if (variantPurchased && variantsArray && variantsArray.length > 0) {
-            totalReviewsParsed++; // Menambah rasio total seluruh ulasan
-            
+            variantReviewTotal++; // Penyebut untuk persentase varian berbasis ulasan
+
             const normalize = (str) => (str || '').toString().toLowerCase().replace(/[^a-z0-9]/g, '');
             const normPurchased = normalize(variantPurchased);
             
@@ -416,9 +431,14 @@ const ShopeeParser = {
           ? new Date(timestamp * 1000).toISOString().split('T')[0]
           : 'Tidak diketahui';
 
-        const dedupeKey = `${user}_${timestamp}`;
-        if (seenKeys.has(dedupeKey)) return;
-        seenKeys.add(dedupeKey);
+        // Dedupe sekunder hanya bila timestamp valid. Pada fallback DOM murni
+        // timestamp selalu 0, sehingga kunci "User_0" akan membuang semua ulasan
+        // selain yang pertama.
+        if (timestamp > 0) {
+          const dedupeKey = `u:${user}_${timestamp}`;
+          if (seenKeys.has(dedupeKey)) return;
+          seenKeys.add(dedupeKey);
+        }
 
         allReviews.push({
           stars: stars,
@@ -430,26 +450,28 @@ const ShopeeParser = {
       });
     });
     
-    // Calculate percentage for variants based on sold_count over total string matched
+    // Hitung persentase penjualan per varian
     if (variantsArray) {
-        // Cek sumber data penjualan
-        const hasApiModels = variantsArray.some(v => v._source_sold === 'api_model');
+        // Sumber terbaik: angka penjualan asli dari API models (yang sudah
+        // diselamatkan ke _api_sold_count sebelum tally ulasan dimulai)
+        const totalSoldModels = variantsArray.reduce((sum, v) => sum + (v._api_sold_count || 0), 0);
+        const hasApiModels = totalSoldModels > 0;
 
         if (hasApiModels) {
-            // Jika data dari API models langsung, jumlahkan total sold dari semua varian
-            const totalSoldModels = variantsArray.reduce((sum, v) => sum + (v.sold_count || 0), 0);
-            
             variantsArray.forEach(v => {
-                if (totalSoldModels > 0) {
-                    v.sales_percentage = Math.round((v.sold_count / totalSoldModels) * 100);
-                } else {
-                    v.sales_percentage = 0;
-                }
+                // Kembalikan angka API — inilah data penjualan sebenarnya
+                v.sold_count = v._api_sold_count || 0;
+                v._isReviewProxy = false;
+                v.sales_percentage = Math.round((v.sold_count / totalSoldModels) * 100);
             });
-        } else if (totalReviewsParsed > 0) {
+        } else if (variantReviewTotal > 0) {
             // Fallback ke hitung persentase dari hasil parser string ulasan (Proxy Varian)
             variantsArray.forEach(v => {
-                v.sales_percentage = Math.round((v.sold_count / totalReviewsParsed) * 100);
+                v.sales_percentage = Math.round((v.sold_count / variantReviewTotal) * 100);
+            });
+        } else {
+            variantsArray.forEach(v => {
+                v.sales_percentage = 0;
             });
         }
     }
@@ -512,7 +534,8 @@ const ShopeeParser = {
     // Return object containing both the filtered reviews and the total reviews counted (for trend)
     return {
       reviews: allReviews, // Kembalikan SEMUA review yang lolos filter (tanpa batas 50)
-      totalReviewsParsed: totalReviewsParsed,
+      totalReviewsParsed: totalReviewsParsed,   // semua ulasan unik yang diproses
+      variantReviewTotal: variantReviewTotal,   // ulasan yang membawa info varian
       tierSummaries: tierSummaries,
       reviewVariantsCount: reviewVariantsCount,
       starFilter: starFilter, // Simpan filter yang digunakan untuk label export
