@@ -337,6 +337,7 @@ function createPanel() {
 
       .badge.api  { background: rgba(76,175,80,.3); }
       .badge.dom  { background: rgba(255,193,7,.3); }
+      .badge.version { font-size: 9.5px; background: rgba(0,0,0,.22); border: 1px solid rgba(255,255,255,.25); color: #fff; }
       .badge.loading { background: rgba(255,255,255,.15); animation: blink 1s infinite; }
       .badge.error   { background: rgba(244,67,54,.4); }
 
@@ -713,6 +714,7 @@ function createPanel() {
       <div class="header" id="dragHandle">
         <div class="title">
           🛍️ Shopee Scraper
+          <span class="badge version" id="panelVersion" title="Versi Ekstensi">v1.2.0</span>
           <span class="badge" id="statusBadge">idle</span>
         </div>
         <div class="header-btns">
@@ -1721,6 +1723,13 @@ async function mountPanel() {
 
   const { host, shadow } = createPanel();
   document.documentElement.appendChild(host);
+
+  // Set version badge dari manifest
+  try {
+    const ver = chrome.runtime.getManifest()?.version;
+    const verEl = shadow.getElementById('panelVersion');
+    if (verEl && ver) verEl.textContent = 'v' + ver;
+  } catch (e) {}
 
   const panel = shadow.getElementById('panel');
   const mini = shadow.getElementById('mini');

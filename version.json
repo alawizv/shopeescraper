@@ -1,4 +1,4 @@
-﻿{
-  "version": "1.1.0",
-  "changelog": "Tambah tombol Salin ke Sheets (TSV), confidence badge pada estimasi omset, dan cleanup file debug."
+{
+  "version": "1.2.0",
+  "changelog": "Perbaikan mata uang Rp (COL fix), penghentian review otomatis & instan stop, format master tracking TSV 1 baris, fallback estimasi ulasan 30 hari."
 }

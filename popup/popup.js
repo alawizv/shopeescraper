@@ -84,6 +84,12 @@
   async function init() {
     console.log('[Popup] Inisialisasi...');
 
+    try {
+      const ver = chrome.runtime.getManifest()?.version;
+      const verEl = document.getElementById('popup-version');
+      if (verEl && ver) verEl.textContent = 'v' + ver;
+    } catch (e) {}
+
     // Load filter bintang yang tersimpan dari sesi sebelumnya
     await loadStarFilter();
 
