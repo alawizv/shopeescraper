@@ -69,7 +69,15 @@ function escapeHTML(str) {
 }
 
 function buildCSV(output) {
-  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""').replace(/[\r\n]+/g, ' ').trim()}"`;
+  // Sheets/Excel menganggap sel yang diawali = + @ (atau - non-angka) sebagai
+  // rumus. Teks dari Shopee (nama produk, ulasan) bisa saja diawali karakter
+  // itu, jadi diberi awalan ' agar dibaca sebagai teks biasa.
+  const guardFormula = (s) => {
+    if (/^[=+@]/.test(s)) return "'" + s;
+    if (s.startsWith('-') && s !== '-' && !/^-\d+([.,]\d+)?$/.test(s)) return "'" + s;
+    return s;
+  };
+  const esc = (v) => `"${guardFormula(String(v ?? '').replace(/"/g, '""').replace(/[\r\n]+/g, ' ').trim())}"`;
   let csv = '';
 
   const monthlySold = output.monthly_sold?.value || output.omset?.sold_per_month || 0;
@@ -77,7 +85,7 @@ function buildCSV(output) {
   const soldDisplay = monthlySold > 0 ? (isEstimated ? `${monthlySold} (est)` : monthlySold) : '-';
   const shopStatus = output.shop?.is_mall ? 'Shopee Mall' : output.shop?.is_preferred ? 'Star+' : 'Regular';
 
-  csv += '=== INFO PRODUK ===\n';
+  csv += '[ INFO PRODUK ]\n';
   csv += 'Field,Value\n';
   csv += `Nama Produk,${esc(output.product?.name || '')}\n`;
   csv += `Harga Min,${output.product?.price_min || 0}\n`;
@@ -93,7 +101,7 @@ function buildCSV(output) {
   csv += `Waktu Scraping,${esc(output.scraped_at || '')}\n\n`;
 
   if (output.shop) {
-    csv += '=== INFO TOKO ===\n';
+    csv += '[ INFO TOKO ]\n';
     csv += 'Field,Value\n';
     csv += `Nama Toko,${esc(output.shop.name || '')}\n`;
     csv += `Lokasi,${esc(output.shop.location || '')}\n`;
@@ -103,7 +111,7 @@ function buildCSV(output) {
     csv += `Status,${esc(shopStatus)}\n\n`;
   }
 
-  csv += '=== VARIANTS ===\n';
+  csv += '[ VARIANTS ]\n';
   if (output.variants?.length) {
     csv += 'Tier 1,Tier 2,% Terjual,Harga\n';
     const sortedV = [...output.variants].sort((a, b) => (b.sales_percentage || 0) - (a.sales_percentage || 0));
@@ -117,8 +125,8 @@ function buildCSV(output) {
 
   // Label section review dinamis
   const reviewLabel = output.star_filter_label
-    ? `=== REVIEW (${output.star_filter_label.toUpperCase()}) ===`
-    : '=== REVIEW ===';
+    ? `[ REVIEW (${output.star_filter_label.toUpperCase()}) ]`
+    : '[ REVIEW ]';
   const reviewData = output.filtered_reviews || output.negative_reviews || [];
 
   csv += reviewLabel + '\n';
@@ -133,7 +141,7 @@ function buildCSV(output) {
 
   if (output.review_insights && (output.review_insights.pain_points?.length || output.review_insights.top_complaint_words?.length)) {
     const ri = output.review_insights;
-    csv += '\n=== INSIGHT KELUHAN PEMBELI ===\n';
+    csv += '\n[ INSIGHT KELUHAN PEMBELI ]\n';
     csv += 'Kategori Keluhan,Jumlah Terdeteksi,Persentase\n';
     (ri.pain_points || []).forEach(p => {
       csv += `${esc(p.label || '')},${p.count},${p.percentage}%\n`;
@@ -153,7 +161,15 @@ function buildCSV(output) {
 function buildTSV(output) {
   const T = '\t'; // tab
   const N = '\n'; // newline
-  const esc = (v) => String(v ?? '').replace(/[\t\r\n]+/g, ' ').trim();
+  // Sheets/Excel menganggap sel yang diawali = + @ (atau - non-angka) sebagai
+  // rumus. Teks dari Shopee (nama produk, ulasan) bisa saja diawali karakter
+  // itu, jadi diberi awalan ' agar dibaca sebagai teks biasa.
+  const guardFormula = (s) => {
+    if (/^[=+@]/.test(s)) return "'" + s;
+    if (s.startsWith('-') && s !== '-' && !/^-\d+([.,]\d+)?$/.test(s)) return "'" + s;
+    return s;
+  };
+  const esc = (v) => guardFormula(String(v ?? '').replace(/[\t\r\n]+/g, ' ').trim());
 
   let tsv = '';
 
@@ -165,7 +181,7 @@ function buildTSV(output) {
   const topPain = output.review_insights?.pain_points?.[0]?.label || '-';
 
   // ── 1. RINGKASAN MASTER SHEET (1 Baris Siap Masuk ke Spreadsheet Riset) ──
-  tsv += '=== 📊 MASTER TRACKING SHEET (1 BARIS PRODUK) ===' + N;
+  tsv += '[ 📊 MASTER TRACKING SHEET (1 BARIS PRODUK) ]' + N;
   tsv += [
     'Tanggal Scraping',
     'Nama Produk',
@@ -201,7 +217,7 @@ function buildTSV(output) {
   ].join(T) + N + N;
 
   // ── 2. INFO DETAIL PRODUK & ESTIMASI OMSET (Key-Value) ─────────
-  tsv += '=== ℹ️ DETAIL PRODUK & ESTIMASI OMSET ===' + N;
+  tsv += '[ ℹ️ DETAIL PRODUK & ESTIMASI OMSET ]' + N;
   tsv += 'Field' + T + 'Value' + N;
   tsv += 'Nama Produk'        + T + esc(output.product?.name)         + N;
   tsv += 'Harga Min'          + T + (output.product?.price_min || 0)  + N;
@@ -218,7 +234,7 @@ function buildTSV(output) {
   tsv += 'Waktu Scraping'     + T + esc(output.scraped_at)            + N;
 
   if (output.shop) {
-    tsv += N + '=== 🏪 INFO TOKO ===' + N;
+    tsv += N + '[ 🏪 INFO TOKO ]' + N;
     tsv += 'Field' + T + 'Value' + N;
     tsv += 'Nama Toko'       + T + esc(output.shop.name)            + N;
     tsv += 'Lokasi'          + T + esc(output.shop.location)         + N;
@@ -229,7 +245,7 @@ function buildTSV(output) {
   }
 
   if (output.variants?.length) {
-    tsv += N + '=== 📦 VARIAN PRODUK ===' + N;
+    tsv += N + '[ 📦 VARIAN PRODUK ]' + N;
     tsv += 'Tier 1' + T + 'Tier 2' + T + '% Terjual' + T + 'Harga' + N;
     const sortedV = [...output.variants].sort((a, b) => (b.sales_percentage || 0) - (a.sales_percentage || 0));
     sortedV.forEach(v => {
@@ -239,7 +255,7 @@ function buildTSV(output) {
 
   if (output.review_insights && (output.review_insights.pain_points?.length || output.review_insights.top_complaint_words?.length)) {
     const ri = output.review_insights;
-    tsv += N + '=== ⚠️ INSIGHT KELUHAN PEMBELI (PAIN POINTS) ===' + N;
+    tsv += N + '[ ⚠️ INSIGHT KELUHAN PEMBELI (PAIN POINTS) ]' + N;
     tsv += 'Kategori Keluhan' + T + 'Jumlah' + T + 'Persentase' + N;
     (ri.pain_points || []).forEach(p => {
       tsv += esc(p.label) + T + p.count + T + p.percentage + '%' + N;
@@ -252,7 +268,7 @@ function buildTSV(output) {
   const reviewData = output.filtered_reviews || output.negative_reviews || [];
   if (reviewData.length) {
     const filterLabel = output.star_filter_label ? ` (${output.star_filter_label})` : '';
-    tsv += N + `=== 💬 DAFTAR ULASAN PEMBELI${filterLabel} ===` + N;
+    tsv += N + `[ 💬 DAFTAR ULASAN PEMBELI${filterLabel} ]` + N;
     tsv += 'Bintang' + T + 'Tanggal' + T + 'User' + T + 'Varian' + T + 'Komentar' + N;
     reviewData.forEach(r => {
       tsv += (r.stars || '') + T + esc(r.date) + T + esc(r.user) + T + esc(r.variant || '-') + T + esc(r.comment) + N;
@@ -1549,7 +1565,15 @@ function renderBulkTable(shadow) {
 function buildBulkSearchTSV(products) {
   const T = '\t';
   const N = '\n';
-  const esc = (v) => String(v ?? '').replace(/\t/g, ' ').replace(/\n/g, ' ');
+  // Sheets/Excel menganggap sel yang diawali = + @ (atau - non-angka) sebagai
+  // rumus. Teks dari Shopee (nama produk, ulasan) bisa saja diawali karakter
+  // itu, jadi diberi awalan ' agar dibaca sebagai teks biasa.
+  const guardFormula = (s) => {
+    if (/^[=+@]/.test(s)) return "'" + s;
+    if (s.startsWith('-') && s !== '-' && !/^-\d+([.,]\d+)?$/.test(s)) return "'" + s;
+    return s;
+  };
+  const esc = (v) => guardFormula(String(v ?? '').replace(/\t/g, ' ').replace(/\n/g, ' '));
 
   let tsv = 'Rank' + T +
             'Nama Produk' + T +
@@ -1579,7 +1603,15 @@ function buildBulkSearchTSV(products) {
 }
 
 function buildBulkSearchCSV(products) {
-  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  // Sheets/Excel menganggap sel yang diawali = + @ (atau - non-angka) sebagai
+  // rumus. Teks dari Shopee (nama produk, ulasan) bisa saja diawali karakter
+  // itu, jadi diberi awalan ' agar dibaca sebagai teks biasa.
+  const guardFormula = (s) => {
+    if (/^[=+@]/.test(s)) return "'" + s;
+    if (s.startsWith('-') && s !== '-' && !/^-\d+([.,]\d+)?$/.test(s)) return "'" + s;
+    return s;
+  };
+  const esc = (v) => `"${guardFormula(String(v ?? '').replace(/"/g, '""'))}"`;
 
   let csv = 'Rank,Nama Produk,Harga Min,Harga Max,Rating,Terjual / Bulan,Total Terjual,Est. Omset / Bulan,Lokasi Toko,URL Produk\n';
 

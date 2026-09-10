@@ -1211,7 +1211,15 @@
   function buildTSV(data) {
     const T = '\t';
     const N = '\n';
-    const esc = (v) => String(v ?? '').replace(/[\t\r\n]+/g, ' ').trim();
+    // Sheets/Excel menganggap sel yang diawali = + @ (atau - non-angka) sebagai
+    // rumus. Teks dari Shopee (nama produk, ulasan) bisa saja diawali karakter
+    // itu, jadi diberi awalan ' agar dibaca sebagai teks biasa.
+    const guardFormula = (s) => {
+      if (/^[=+@]/.test(s)) return "'" + s;
+      if (s.startsWith('-') && s !== '-' && !/^-\d+([.,]\d+)?$/.test(s)) return "'" + s;
+      return s;
+    };
+    const esc = (v) => guardFormula(String(v ?? '').replace(/[\t\r\n]+/g, ' ').trim());
 
     let tsv = '';
 
@@ -1223,7 +1231,7 @@
     const topPain = data.review_insights?.pain_points?.[0]?.label || '-';
 
     // ── 1. RINGKASAN MASTER SHEET (1 Baris Siap Masuk ke Spreadsheet Riset) ──
-    tsv += '=== 📊 MASTER TRACKING SHEET (1 BARIS PRODUK) ===' + N;
+    tsv += '[ 📊 MASTER TRACKING SHEET (1 BARIS PRODUK) ]' + N;
     tsv += [
       'Tanggal Scraping',
       'Nama Produk',
@@ -1259,7 +1267,7 @@
     ].join(T) + N + N;
 
     // ── 2. INFO DETAIL PRODUK & ESTIMASI OMSET (Key-Value) ─────────
-    tsv += '=== ℹ️ DETAIL PRODUK & ESTIMASI OMSET ===' + N;
+    tsv += '[ ℹ️ DETAIL PRODUK & ESTIMASI OMSET ]' + N;
     tsv += 'Field' + T + 'Value' + N;
     tsv += 'Nama Produk'        + T + esc(data.product?.name)              + N;
     tsv += 'Harga Min'          + T + (data.product?.price_min || 0)       + N;
@@ -1276,7 +1284,7 @@
     tsv += 'Waktu Scraping'     + T + esc(data.scraped_at)                 + N;
 
     if (data.shop) {
-      tsv += N + '=== 🏪 INFO TOKO ===' + N;
+      tsv += N + '[ 🏪 INFO TOKO ]' + N;
       tsv += 'Field' + T + 'Value' + N;
       tsv += 'Nama Toko'       + T + esc(data.shop.name)              + N;
       tsv += 'Lokasi'          + T + esc(data.shop.location)           + N;
@@ -1287,7 +1295,7 @@
     }
 
     if (data.variants?.length) {
-      tsv += N + '=== 📦 VARIAN PRODUK ===' + N;
+      tsv += N + '[ 📦 VARIAN PRODUK ]' + N;
       tsv += 'Tier 1' + T + 'Tier 2' + T + '% Terjual' + T + 'Harga' + N;
       const sorted = [...data.variants].sort((a, b) => (b.sales_percentage || 0) - (a.sales_percentage || 0));
       sorted.forEach(v => {
@@ -1297,7 +1305,7 @@
 
     if (data.review_insights && (data.review_insights.pain_points?.length || data.review_insights.top_complaint_words?.length)) {
       const ri = data.review_insights;
-      tsv += N + '=== ⚠️ INSIGHT KELUHAN PEMBELI (PAIN POINTS) ===' + N;
+      tsv += N + '[ ⚠️ INSIGHT KELUHAN PEMBELI (PAIN POINTS) ]' + N;
       tsv += 'Kategori Keluhan' + T + 'Jumlah' + T + 'Persentase' + N;
       (ri.pain_points || []).forEach(p => {
         tsv += esc(p.label) + T + p.count + T + p.percentage + '%' + N;
@@ -1310,7 +1318,7 @@
     const reviews = data.filtered_reviews || data.negative_reviews || [];
     if (reviews.length) {
       const filterLabel = data.star_filter_label ? ` (${data.star_filter_label})` : '';
-      tsv += N + `=== 💬 DAFTAR ULASAN PEMBELI${filterLabel} ===` + N;
+      tsv += N + `[ 💬 DAFTAR ULASAN PEMBELI${filterLabel} ]` + N;
       tsv += 'Bintang' + T + 'Tanggal' + T + 'User' + T + 'Varian' + T + 'Komentar' + N;
       reviews.forEach(r => {
         tsv += (r.stars || '') + T + esc(r.date) + T + esc(r.user) + T + esc(r.variant || '-') + T + esc(r.comment) + N;
@@ -1354,7 +1362,15 @@
   function buildBulkSearchTSV(products) {
     const T = '\t';
     const N = '\n';
-    const esc = (v) => String(v ?? '').replace(/\t/g, ' ').replace(/\n/g, ' ');
+    // Sheets/Excel menganggap sel yang diawali = + @ (atau - non-angka) sebagai
+    // rumus. Teks dari Shopee (nama produk, ulasan) bisa saja diawali karakter
+    // itu, jadi diberi awalan ' agar dibaca sebagai teks biasa.
+    const guardFormula = (s) => {
+      if (/^[=+@]/.test(s)) return "'" + s;
+      if (s.startsWith('-') && s !== '-' && !/^-\d+([.,]\d+)?$/.test(s)) return "'" + s;
+      return s;
+    };
+    const esc = (v) => guardFormula(String(v ?? '').replace(/\t/g, ' ').replace(/\n/g, ' '));
 
     let tsv = 'No' + T + 'Nama Produk' + T + 'Estimasi Omset/Bulan' + T + 'Terjual/Bulan' + T + 'Total Terjual' + T + 'Harga Min' + T + 'Harga Max' + T + 'Rating' + T + 'Lokasi' + T + 'Toko' + T + 'URL' + N;
 

@@ -32,7 +32,7 @@ const ShopeeExporter = {
   downloadCSV(data, filename = 'shopee-product') {
     let csvContent = '';
 
-    csvContent += '=== INFO PRODUK ===\n';
+    csvContent += '[ INFO PRODUK ]\n';
     csvContent += 'Field,Value\n';
     csvContent += `Nama Produk,"${this._escapeCSV(data.product?.name || '')}"\n`;
     csvContent += `Harga Min,${data.product?.price_min || 0}\n`;
@@ -48,7 +48,7 @@ const ShopeeExporter = {
     csvContent += '\n';
 
     if (data.shop) {
-      csvContent += '=== INFO TOKO ===\n';
+      csvContent += '[ INFO TOKO ]\n';
       csvContent += 'Field,Value\n';
       csvContent += `Nama Toko,"${this._escapeCSV(data.shop.name || '')}"\n`;
       csvContent += `Lokasi,"${this._escapeCSV(data.shop.location || '')}"\n`;
@@ -63,14 +63,14 @@ const ShopeeExporter = {
     // (dulu membaca data.trend yang tidak pernah dihasilkan parser, jadi selalu kosong)
     const trendRows = this._buildTrendRows(data);
     if (trendRows.length > 1) {
-      csvContent += '=== OMSET & TREND 30 HARI ===\n';
+      csvContent += '[ OMSET & TREND 30 HARI ]\n';
       trendRows.forEach(row => {
         csvContent += `${row[0]},"${this._escapeCSV(String(row[1] ?? ''))}"\n`;
       });
       csvContent += '\n';
     }
 
-    csvContent += '=== VARIAN PRODUK ===\n';
+    csvContent += '[ VARIAN PRODUK ]\n';
     if (data.variants && data.variants.length > 0) {
       csvContent += 'Tier 1,Tier 2,% Terjual,Harga\n';
       // Urutkan dari % terjual terbesar ke terkecil (descending)
@@ -85,8 +85,8 @@ const ShopeeExporter = {
 
     // Label section review dinamis sesuai filter bintang
     const reviewLabel = data.star_filter_label
-      ? `=== REVIEW (${data.star_filter_label.toUpperCase()}) ===`
-      : '=== REVIEW ==='; 
+      ? `[ REVIEW (${data.star_filter_label.toUpperCase()}) ]`
+      : '[ REVIEW ]'; 
     const reviewData = data.filtered_reviews || data.negative_reviews || [];
     
     csvContent += reviewLabel + '\n';
@@ -389,7 +389,13 @@ const ShopeeExporter = {
   _escapeCSV(str) {
     if (str === null || str === undefined) return '';
     // Terima angka/boolean juga — dulu .replace() akan melempar untuk non-string
-    return String(str).replace(/"/g, '""').replace(/\n/g, ' ').replace(/\r/g, '');
+    const s = String(str).replace(/"/g, '""').replace(/\n/g, ' ').replace(/\r/g, '');
+    // Sheets/Excel menganggap sel yang diawali = + @ (atau - non-angka) sebagai
+    // rumus. Teks dari Shopee bisa saja diawali karakter itu, jadi diberi
+    // awalan ' agar dibaca sebagai teks biasa.
+    if (/^[=+@]/.test(s)) return "'" + s;
+    if (s.startsWith('-') && s !== '-' && !/^-\d+([.,]\d+)?$/.test(s)) return "'" + s;
+    return s;
   },
 
   _getDateString() {

@@ -290,7 +290,15 @@ var ShopeeDB = (typeof ShopeeDB !== 'undefined' && ShopeeDB) ? ShopeeDB : (funct
     buildBulkTSV(records) {
       const T = '\t';
       const N = '\n';
-      const esc = (v) => String(v ?? '').replace(/[\t\r\n]+/g, ' ').trim();
+      // Sheets/Excel menganggap sel yang diawali = + @ (atau - non-angka) sebagai
+      // rumus. Nama produk / toko dari Shopee bisa saja diawali karakter itu,
+      // jadi diberi awalan ' agar dibaca sebagai teks biasa.
+      const guardFormula = (s) => {
+        if (/^[=+@]/.test(s)) return "'" + s;
+        if (s.startsWith('-') && s !== '-' && !/^-\d+([.,]\d+)?$/.test(s)) return "'" + s;
+        return s;
+      };
+      const esc = (v) => guardFormula(String(v ?? '').replace(/[\t\r\n]+/g, ' ').trim());
 
       let tsv = '';
       tsv += 'No' + T +
@@ -332,7 +340,15 @@ var ShopeeDB = (typeof ShopeeDB !== 'undefined' && ShopeeDB) ? ShopeeDB : (funct
     },
 
     buildBulkCSV(records) {
-      const esc = (v) => `"${String(v ?? '').replace(/"/g, '""').replace(/[\r\n]+/g, ' ').trim()}"`;
+      // Sheets/Excel menganggap sel yang diawali = + @ (atau - non-angka) sebagai
+      // rumus. Nama produk / toko dari Shopee bisa saja diawali karakter itu,
+      // jadi diberi awalan ' agar dibaca sebagai teks biasa.
+      const guardFormula = (s) => {
+        if (/^[=+@]/.test(s)) return "'" + s;
+        if (s.startsWith('-') && s !== '-' && !/^-\d+([.,]\d+)?$/.test(s)) return "'" + s;
+        return s;
+      };
+      const esc = (v) => `"${guardFormula(String(v ?? '').replace(/"/g, '""').replace(/[\r\n]+/g, ' ').trim())}"`;
 
       let csv = 'No,Nama Produk,Harga Min,Harga Max,Rating,Total Terjual,Terjual / Bulan,Omset Quick,Omset Detail,Top Keluhan,Toko,Lokasi,URL Produk,Waktu Scraping\n';
 
