@@ -767,9 +767,19 @@ var ShopeeParser = (typeof ShopeeParser !== 'undefined' && ShopeeParser) ? Shope
     
     // === SAMPEL REVIEW (data mentah, tanpa pengali) ===
     const totalReviewsOfficial = product?.review_count || 0;
-    const sampleCoverage = totalReviewsOfficial > 0
-      ? Math.min(100, Math.round((recentSalesCount / totalReviewsOfficial) * 100))
-      : 0;
+    let sampleCoverage = 0;
+    if (totalReviewsOfficial > 0 && recentSalesCount > 0) {
+      const pct = (recentSalesCount / totalReviewsOfficial) * 100;
+      if (pct >= 100) {
+        sampleCoverage = 100;
+      } else if (pct < 0.01) {
+        sampleCoverage = 0.01;
+      } else if (pct < 1) {
+        sampleCoverage = Number(pct.toFixed(2));
+      } else {
+        sampleCoverage = Number(pct.toFixed(1));
+      }
+    }
 
     // Parse data toko jika ada
     const shop = rawShopData ? this.parseShop(rawShopData) : null;
@@ -869,8 +879,8 @@ var ShopeeParser = (typeof ShopeeParser !== 'undefined' && ShopeeParser) ? Shope
         unique_variants_found: Object.keys(parseReviewResult?.reviewVariantsCount || {}).length,
         data_note: recentSalesCount > 0
           ? (sampleCoverage >= 100
-              ? `✅ Semua ${totalReviewsOfficial} ulasan berhasil ter-scrape (${recentSalesCount} unik)`
-              : `Sampel dari ${recentSalesCount} ulasan unik (${sampleCoverage}% dari ${totalReviewsOfficial} total)`)
+              ? `✅ Semua ${Number(totalReviewsOfficial).toLocaleString('id-ID')} ulasan berhasil ter-scrape (${Number(recentSalesCount).toLocaleString('id-ID')} unik)`
+              : `Sampel dari ${Number(recentSalesCount).toLocaleString('id-ID')} ulasan unik (${sampleCoverage}% dari ${Number(totalReviewsOfficial).toLocaleString('id-ID')} total)${recentSalesCount >= 3000 ? ' — batas maksimal pagination web Shopee' : ''}`)
           : 'Belum ada ulasan yang ter-scrape'
       },
       variants: variants,

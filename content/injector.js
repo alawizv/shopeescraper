@@ -965,9 +965,13 @@
         ? monthlySoldCache[currentId].sold_per_month 
         : null;
 
+      const allCurrentReviews = (interceptedData.allScrapedReviews && interceptedData.allScrapedReviews.length > 0)
+        ? [{ data: { ratings: interceptedData.allScrapedReviews } }]
+        : (interceptedData.reviews || []);
+
       const dataToSave = {
         rawProduct: interceptedData.product,
-        rawReviews: interceptedData.reviews,
+        rawReviews: allCurrentReviews,
         rawShop: interceptedData.shop,
         dataSource: interceptedData.dataSource,
         fetchStatus: interceptedData.fetchStatus || null,
@@ -1144,6 +1148,7 @@
         console.log(`%c[Shopee Scraper V3] ✅ FETCH_REVIEWS selesai! Total: ${reviews.length} review`, 'background: green; color: white; font-size: 14px;');
         
         // Simpan ke state dan storage — panel akan auto-refresh via storage.onChanged
+        interceptedData.allScrapedReviews = reviews;
         interceptedData.reviews = [{ data: { ratings: reviews } }];
         interceptedData.fetchStatus = `done:${reviews.length}`;
         saveDataToStorage();
@@ -1538,6 +1543,7 @@
     interceptedData.reviews = [];
     
     // Update status awal
+    interceptedData.allScrapedReviews = allReviews;
     interceptedData.fetchStatus = `loading:${allReviews.length}`;
     saveDataToStorage();
 
@@ -1829,13 +1835,13 @@
             const coverage = totalReviewsOfficial > 0 ? ((allReviews.length / totalReviewsOfficial) * 100).toFixed(1) : '?';
             console.log(`[Shopee Scraper V3] 📄 Halaman ${paginationRounds}: +${captured} review, total: ${allReviews.length} (${coverage}%)`);
 
-            // Progressive save setiap 100 review
-            if (allReviews.length - lastProgressSave >= 100) {
+            // Progressive save: tiap 25 review di awal, lalu tiap 50 review agar live update di panel responsif
+            const saveInterval = allReviews.length < 150 ? 25 : 50;
+            if (allReviews.length - lastProgressSave >= saveInterval) {
               lastProgressSave = allReviews.length;
-              interceptedData.reviews = [{ data: { ratings: allReviews } }];
+              interceptedData.allScrapedReviews = allReviews;
               interceptedData.fetchStatus = `loading:${allReviews.length}`;
               saveDataToStorage();
-              interceptedData.reviews = []; // Reset lagi setelah save
               console.log(`%c[Shopee Scraper V3] 💾 Progressive save: ${allReviews.length}`, 'background: teal; color: white;');
             }
           } else {
@@ -1843,7 +1849,35 @@
             emptyStreak++;
             console.log(`[Shopee Scraper V3] ⏳ Tidak ada review baru setelah klik (${emptyStreak}/${MAX_EMPTY_STREAK}).`);
             if (emptyStreak >= MAX_EMPTY_STREAK) {
-              console.log(`%c[Shopee Scraper V3] 🏁 ${MAX_EMPTY_STREAK}× klik beruntun tanpa data baru. Menghentikan pagination.`, 'background: orange; color: black;');
+              console.log(`%c[Shopee Scraper V3] 🏁 ${MAX_EMPTY_STREAK}× klik beruntun tanpa data baru di tab ini. Mencoba pindah tab filter review...`, 'background: orange; color: black;');
+              emptyStreak = 0; // reset untuk tab baru
+              
+              // Coba temukan semua tombol filter review
+              const filterSelectors = [
+                '.product-ratings .product-rating-overview__filter',
+                '[class*="product-rating"] [class*="filter"]',
+                '.shopee-product-rating [role="tab"]'
+              ];
+              let filterBtns = [];
+              for (const sel of filterSelectors) {
+                const fbs = document.querySelectorAll(sel);
+                if (fbs.length > 0) {
+                  filterBtns = Array.from(fbs);
+                  break;
+                }
+              }
+              currentFilterTabIndex++;
+              if (filterBtns.length > 0 && currentFilterTabIndex < filterBtns.length) {
+                const fBtn = filterBtns[currentFilterTabIndex];
+                const fLabel = (fBtn.textContent || '').trim().substring(0, 20);
+                console.log(`[Shopee Scraper V3] 🔄 Pindah ke tab filter: ${fLabel}`);
+                try {
+                  fBtn.click();
+                  await interruptibleSleep(1500);
+                  continue;
+                } catch(e) {}
+              }
+              console.log(`%c[Shopee Scraper V3] 🏁 Semua tab ulasan sudah selesai. Total review: ${allReviews.length}`, 'background: green; color: white;');
               break;
             }
           }
