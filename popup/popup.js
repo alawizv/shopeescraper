@@ -87,6 +87,9 @@
     // Load filter bintang yang tersimpan dari sesi sebelumnya
     await loadStarFilter();
 
+    // Cek apakah ada update yang belum dijalankan
+    checkUpdateBanner();
+
     setupEventListeners();
 
     const tab = await getActiveTab();
@@ -674,6 +677,36 @@
       elements.exportStatus.classList.add('d-none');
     }, 5000);
   }
+
+  // ========================================
+  // Update Banner
+  // ========================================
+
+  /**
+   * Tampilkan banner update jika ada versi baru yang terdeteksi service worker
+   */
+  function checkUpdateBanner() {
+    chrome.storage.local.get('shopeeUpdateInfo', (res) => {
+      if (res.shopeeUpdateInfo) {
+        showUpdateBanner(res.shopeeUpdateInfo);
+      }
+    });
+  }
+
+  function showUpdateBanner(updateInfo) {
+    const banner = document.getElementById('update-banner');
+    const text   = document.getElementById('update-banner-text');
+    if (!banner) return;
+    if (text) text.textContent = `🎉 Update v${updateInfo.remoteVersion} tersedia! ${updateInfo.changelog || ''}`;
+    banner.classList.remove('d-none');
+  }
+
+  // Dengarkan pesan live dari service worker (jika popup terbuka tepat saat cek update)
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.action === 'UPDATE_AVAILABLE') {
+      showUpdateBanner(message.updateInfo);
+    }
+  });
 
   // ========================================
   // Helper functions

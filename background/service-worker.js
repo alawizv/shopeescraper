@@ -345,4 +345,95 @@ chrome.runtime.onInstalled.addListener((details) => {
       shopeeSpreadsheetId: null
     });
   }
+
+  // Cek update segera setelah install/update, lalu jadwalkan tiap 24 jam
+  checkForUpdate();
+  chrome.alarms.create('shopeeScraperUpdateCheck', { periodInMinutes: 1440 }); // 24 jam
 });
+
+// Cek update saat browser/extension pertama kali aktif (startup)
+chrome.runtime.onStartup.addListener(() => {
+  checkForUpdate();
+});
+
+// Tangani alarm update
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'shopeeScraperUpdateCheck') {
+    checkForUpdate();
+  }
+});
+
+// ========================================
+// Update Checker
+// ========================================
+const VERSION_URL = 'https://raw.githubusercontent.com/alawizv/shopeescraper/main/version.json';
+
+/**
+ * Bandingkan dua string versi semver (misal: "1.2.0" vs "1.1.0")
+ * Return true jika remoteVersion lebih baru dari localVersion
+ */
+function isNewerVersion(localVersion, remoteVersion) {
+  const local  = (localVersion  || '0.0.0').split('.').map(Number);
+  const remote = (remoteVersion || '0.0.0').split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((remote[i] || 0) > (local[i] || 0)) return true;
+    if ((remote[i] || 0) < (local[i] || 0)) return false;
+  }
+  return false;
+}
+
+async function checkForUpdate() {
+  try {
+    const resp = await fetch(VERSION_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if (!resp.ok) return;
+
+    const data = await resp.json();
+    const remoteVersion = data.version;
+    const changelog     = data.changelog || '';
+    const localVersion  = chrome.runtime.getManifest().version;
+
+    console.log(`[Shopee Scraper] Versi lokal: ${localVersion} | Versi terbaru: ${remoteVersion}`);
+
+    if (!isNewerVersion(localVersion, remoteVersion)) {
+      // Sudah up-to-date — hapus flag update jika ada
+      chrome.storage.local.remove('shopeeUpdateInfo');
+      chrome.action.setBadgeText({ text: '' });
+      return;
+    }
+
+    // Ada versi baru!
+    const updateInfo = { remoteVersion, changelog, checkedAt: Date.now() };
+    chrome.storage.local.set({ shopeeUpdateInfo: updateInfo });
+
+    // Badge merah di icon extension
+    chrome.action.setBadgeText({ text: 'NEW' });
+    chrome.action.setBadgeBackgroundColor({ color: '#ee4d2d' });
+
+    // Notifikasi Chrome (muncul di pojok kanan bawah layar)
+    chrome.notifications.create('shopeeScraperUpdate', {
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title: '🛍️ Shopee Scraper — Update Tersedia!',
+      message: `Versi ${remoteVersion} sudah tersedia (kamu: ${localVersion}).\n${changelog}`,
+      buttons: [{ title: 'Cara Update' }],
+      priority: 1
+    });
+
+    // Broadcast ke popup jika sedang terbuka
+    chrome.runtime.sendMessage({
+      action: 'UPDATE_AVAILABLE',
+      updateInfo
+    }).catch(() => {});
+
+  } catch (e) {
+    console.warn('[Shopee Scraper] Gagal cek update:', e.message);
+  }
+}
+
+// Klik tombol "Cara Update" di notifikasi → buka halaman release GitHub
+chrome.notifications.onButtonClicked.addListener((notifId, btnIdx) => {
+  if (notifId === 'shopeeScraperUpdate' && btnIdx === 0) {
+    chrome.tabs.create({ url: 'https://github.com/alawizv/shopeescraper#update' });
+  }
+});
+

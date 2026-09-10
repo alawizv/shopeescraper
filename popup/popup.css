@@ -731,3 +731,37 @@ body {
   border-color: #0d47a1;
   color: #0d47a1;
 }
+
+/* === Update Banner === */
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, #ff6f00, #ee4d2d);
+  color: white;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  animation: pulse-banner 2s ease-in-out infinite;
+}
+
+@keyframes pulse-banner {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .85; }
+}
+
+.update-banner-link {
+  color: white;
+  text-decoration: none;
+  background: rgba(255,255,255,.22);
+  border: 1px solid rgba(255,255,255,.4);
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: background .15s;
+}
+.update-banner-link:hover {
+  background: rgba(255,255,255,.38);
+}
