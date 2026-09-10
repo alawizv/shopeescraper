@@ -12,17 +12,66 @@ Chrome Extension MV3 untuk men-scrape data produk dari halaman produk Shopee Ind
 
 ## 📦 Instalasi
 
-### Langkah 1: Download / Clone Project
+> Tidak perlu punya akun GitHub. Tidak perlu install Git. Cukup 1 file.
 
-Download ZIP dan ekstrak folder `shopee-scraper/`
+### Langkah 1: Unduh file pemasang
 
-### Langkah 2: Load di Chrome
+Unduh **`install-update.bat`** dari repo ini
+([klik kanan link ini → Save link as](https://raw.githubusercontent.com/alawizv/shopeescraper/main/install-update.bat)),
+simpan di mana saja — misalnya Desktop.
 
-1. Buka **Chrome** → ketik `chrome://extensions/` di address bar
-2. Aktifkan **Developer mode** (toggle di pojok kanan atas)
-3. Klik **Load unpacked**
-4. Pilih folder `shopee-scraper/` yang sudah didownload
-5. Extension akan muncul di toolbar Chrome
+### Langkah 2: Klik dua kali file itu
+
+File tersebut akan mengunduh extension versi terbaru secara otomatis ke folder:
+
+```
+Documents\ShopeeScraperExtension
+```
+
+Kalau Windows menampilkan peringatan **"Windows protected your PC"**,
+klik **More info** → **Run anyway**. (Peringatan ini muncul karena file `.bat`
+diunduh dari internet, bukan karena file-nya berbahaya.)
+
+### Langkah 3: Pasang ke Chrome
+
+Setelah unduhan selesai, halaman Extensions Chrome terbuka sendiri. Lakukan 4 langkah
+yang juga ditampilkan di layar:
+
+1. Nyalakan **Developer mode** (tombol geser di pojok kanan atas)
+2. Klik **Load unpacked**
+3. Pilih folder `Documents\ShopeeScraperExtension`
+4. Klik **Select Folder**
+
+Ikon extension akan muncul di toolbar Chrome. Selesai.
+
+---
+
+## Update
+
+Extension mengecek versi terbaru sendiri **setiap 24 jam**. Kalau ada versi baru,
+akan muncul:
+
+- Notifikasi Windows di pojok kanan bawah layar
+- Tulisan **NEW** berwarna merah di ikon extension
+- Banner hijau di dalam popup extension
+
+### Cara memperbarui (2 langkah)
+
+**1. Klik dua kali `install-update.bat`** — file yang sama seperti waktu instalasi.
+File ini otomatis tahu bahwa extension sudah terpasang, jadi ia hanya mengunduh
+file-file yang baru. Tidak akan menghapus data hasil scraping.
+
+**2. Klik ikon extension di Chrome → klik tombol "Muat Ulang"** di dalam popup.
+
+Selesai. Versi baru langsung aktif tanpa perlu memasang ulang di `chrome://extensions`.
+
+> **Ingin cek update sekarang juga?** Klik tulisan versi (`v1.2.0`) di pojok kanan
+> atas popup. Kalau sudah versi terbaru, akan berubah jadi **✓ Terbaru**.
+
+### Kalau file `install-update.bat` hilang
+
+Unduh ulang [di sini](https://raw.githubusercontent.com/alawizv/shopeescraper/main/install-update.bat)
+(klik kanan → Save link as), lalu klik dua kali seperti biasa.
 
 ## 🚀 Cara Pakai
 

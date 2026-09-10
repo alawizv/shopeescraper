@@ -737,7 +737,7 @@ function createPanel() {
         </div>
         <div id="panelUpdateChangelog" style="font-size:10px; color:#666; margin-top:3px;"></div>
         <div style="margin-top:4px;">
-          <a href="https://github.com/alawizv/shopeescraper" target="_blank" style="color:#ee4d2d; font-weight:700; text-decoration:none; font-size:10.5px;">Lihat Changelog di GitHub →</a>
+          <a href="https://github.com/alawizv/shopeescraper#update" target="_blank" style="color:#ee4d2d; font-weight:700; text-decoration:none; font-size:10.5px;">Cara Update →</a>
         </div>
       </div>
 
