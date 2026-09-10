@@ -121,6 +121,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true;
   }
+
+  // ── Manual Cek Update dari Panel atau Popup ──
+  if (message.action === 'CHECK_FOR_UPDATE_NOW') {
+    checkForUpdate().then(() => {
+      chrome.storage.local.get('shopeeUpdateInfo', (res) => {
+        sendResponse({ ok: true, updateInfo: res.shopeeUpdateInfo || null });
+      });
+    }).catch(err => {
+      sendResponse({ error: err.message });
+    });
+    return true;
+  }
+
+  // ── Muat Ulang (Reload) Ekstensi Langsung dari Panel atau Popup ──
+  if (message.action === 'RELOAD_EXTENSION_NOW') {
+    sendResponse({ ok: true });
+    setTimeout(() => {
+      chrome.runtime.reload();
+    }, 200);
+    return true;
+  }
 });
 
 /**

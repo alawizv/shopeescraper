@@ -11,9 +11,10 @@
 
     <!-- Header -->
     <header class="header">
-      <div style="display: flex; align-items: baseline; gap: 6px;">
+      <div style="display: flex; align-items: center; gap: 6px;">
         <h1 style="margin: 0;">🛍️ Shopee Scraper</h1>
-        <span id="popup-version" style="font-size: 10px; color: rgba(255,255,255,0.85); font-weight: 700; background: rgba(0,0,0,0.2); padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.25);">v1.2.0</span>
+        <span id="popup-version" style="font-size: 10px; color: rgba(255,255,255,0.85); font-weight: 700; background: rgba(0,0,0,0.2); padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.25); cursor:pointer;" title="Klik untuk cek update versi">v1.2.0</span>
+        <button id="btn-popup-header-reload" title="Muat ulang ekstensi (Reload) & refresh tab Shopee" style="padding:1px 5px; font-size:10px; border-radius:4px; background:rgba(255,255,255,.2); color:#fff; border:1px solid rgba(255,255,255,.3); cursor:pointer;">🔄</button>
       </div>
       <div id="status-badge" class="status-badge idle">
         <span class="status-dot"></span>
@@ -23,8 +24,11 @@
 
     <!-- Banner Update Tersedia -->
     <div id="update-banner" class="update-banner d-none">
-      <span id="update-banner-text">🎉 Update tersedia!</span>
-      <a id="update-banner-link" href="https://github.com/alawizv/shopeescraper" target="_blank" class="update-banner-link">Cara Update →</a>
+      <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+        <span id="update-banner-text">🎉 Update tersedia!</span>
+        <button id="btn-popup-reload-ext" style="background:#ee4d2d; color:#fff; border:none; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:700; cursor:pointer; flex-shrink:0;">🔄 Muat Ulang</button>
+      </div>
+      <a id="update-banner-link" href="https://github.com/alawizv/shopeescraper" target="_blank" class="update-banner-link" style="margin-top:4px; display:inline-block;">Cara Update →</a>
     </div>
 
     <!-- Tab Navigasi Popup -->

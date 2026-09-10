@@ -714,7 +714,8 @@ function createPanel() {
       <div class="header" id="dragHandle">
         <div class="title">
           🛍️ Shopee Scraper
-          <span class="badge version" id="panelVersion" title="Versi Ekstensi">v1.2.0</span>
+          <span class="badge version" id="panelVersion" title="Klik untuk cek update versi" style="cursor:pointer;">v1.2.0</span>
+          <button class="btn-mini" id="btnHeaderReload" title="Muat ulang ekstensi (Reload) & refresh halaman Shopee" style="padding:1px 6px; font-size:10px; border-radius:4px; background:rgba(255,255,255,.2); color:#fff; border:1px solid rgba(255,255,255,.3); cursor:pointer;">🔄</button>
           <span class="badge" id="statusBadge">idle</span>
         </div>
         <div class="header-btns">
@@ -726,6 +727,18 @@ function createPanel() {
       <div class="nav-tabs">
         <button class="nav-tab active" id="tabBtnActive">📦 Produk Aktif</button>
         <button class="nav-tab" id="tabBtnHistory">📜 Riwayat <span class="tab-badge" id="panelHistoryCount">0</span></button>
+      </div>
+
+      <!-- Banner Update Ekstensi -->
+      <div id="panelUpdateBanner" style="display:none; margin: 8px 12px 0 12px; padding:8px 10px; background:#fffbe6; border:1px solid #ffe58f; border-radius:8px; font-size:11px; color:#ad4e00; line-height:1.4;">
+        <div style="font-weight:700; display:flex; justify-content:space-between; align-items:center;">
+          <span>🎉 Update <b id="panelRemoteVer">v...</b> Tersedia!</span>
+          <button id="btnPanelReloadExt" style="background:#ee4d2d; color:#fff; border:none; padding:3px 8px; border-radius:4px; font-size:10px; font-weight:700; cursor:pointer;" title="Muat ulang ekstensi dan refresh halaman">🔄 Muat Ulang</button>
+        </div>
+        <div id="panelUpdateChangelog" style="font-size:10px; color:#666; margin-top:3px;"></div>
+        <div style="margin-top:4px;">
+          <a href="https://github.com/alawizv/shopeescraper" target="_blank" style="color:#ee4d2d; font-weight:700; text-decoration:none; font-size:10.5px;">Lihat Changelog di GitHub →</a>
+        </div>
       </div>
 
       <div class="body" id="bodyActive">
@@ -1730,6 +1743,78 @@ async function mountPanel() {
     const verEl = shadow.getElementById('panelVersion');
     if (verEl && ver) verEl.textContent = 'v' + ver;
   } catch (e) {}
+
+  // ── Update Notification & Manual Reload di Panel ──
+  const updateBanner = shadow.getElementById('panelUpdateBanner');
+  const remoteVerEl = shadow.getElementById('panelRemoteVer');
+  const changelogEl = shadow.getElementById('panelUpdateChangelog');
+  const btnReloadExt = shadow.getElementById('btnPanelReloadExt');
+  const btnHeaderReload = shadow.getElementById('btnHeaderReload');
+  const verBadge = shadow.getElementById('panelVersion');
+
+  function renderPanelUpdate(info) {
+    if (!updateBanner) return;
+    if (info && info.remoteVersion) {
+      if (remoteVerEl) remoteVerEl.textContent = 'v' + info.remoteVersion;
+      if (changelogEl) changelogEl.textContent = info.changelog || '';
+      updateBanner.style.display = 'block';
+    } else {
+      updateBanner.style.display = 'none';
+    }
+  }
+
+  // Cek update info yang tersimpan
+  chrome.storage.local.get('shopeeUpdateInfo', (res) => {
+    if (res?.shopeeUpdateInfo) renderPanelUpdate(res.shopeeUpdateInfo);
+  });
+
+  // Dengarkan perubahan update dari background
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.shopeeUpdateInfo) {
+      renderPanelUpdate(changes.shopeeUpdateInfo.newValue);
+    }
+  });
+
+  // Klik badge versi untuk manual cek update
+  if (verBadge) {
+    verBadge.addEventListener('click', async () => {
+      const origText = verBadge.textContent;
+      verBadge.textContent = '⏳ Cek...';
+      try {
+        const resp = await chrome.runtime.sendMessage({ action: 'CHECK_FOR_UPDATE_NOW' });
+        if (resp && resp.updateInfo) {
+          renderPanelUpdate(resp.updateInfo);
+          verBadge.textContent = origText;
+        } else {
+          verBadge.textContent = '✓ Terbaru';
+          setTimeout(() => { verBadge.textContent = origText; }, 2500);
+        }
+      } catch (e) {
+        verBadge.textContent = origText;
+      }
+    });
+  }
+
+  // Fungsi reload ekstensi dan refresh halaman
+  async function triggerReloadExtension(btn) {
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '⏳';
+    }
+    try {
+      await chrome.runtime.sendMessage({ action: 'RELOAD_EXTENSION_NOW' });
+    } catch (e) {}
+    setTimeout(() => {
+      window.location.reload();
+    }, 400);
+  }
+
+  if (btnReloadExt) {
+    btnReloadExt.addEventListener('click', () => triggerReloadExtension(btnReloadExt));
+  }
+  if (btnHeaderReload) {
+    btnHeaderReload.addEventListener('click', () => triggerReloadExtension(btnHeaderReload));
+  }
 
   const panel = shadow.getElementById('panel');
   const mini = shadow.getElementById('mini');

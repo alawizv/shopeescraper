@@ -1119,6 +1119,49 @@
     }
   });
 
+  // ── Reload Extension dari Popup ──
+  async function triggerPopupReload() {
+    try {
+      await chrome.runtime.sendMessage({ action: 'RELOAD_EXTENSION_NOW' });
+    } catch (e) {}
+    try {
+      const tab = await getActiveTab();
+      if (tab?.id) chrome.tabs.reload(tab.id);
+    } catch (e) {}
+    window.close();
+  }
+
+  const btnPopHeaderReload = document.getElementById('btn-popup-header-reload');
+  if (btnPopHeaderReload) {
+    btnPopHeaderReload.addEventListener('click', triggerPopupReload);
+  }
+
+  const btnPopReloadExt = document.getElementById('btn-popup-reload-ext');
+  if (btnPopReloadExt) {
+    btnPopReloadExt.addEventListener('click', triggerPopupReload);
+  }
+
+  // Klik versi di popup untuk cek update manual
+  const popVerEl = document.getElementById('popup-version');
+  if (popVerEl) {
+    popVerEl.addEventListener('click', async () => {
+      const orig = popVerEl.textContent;
+      popVerEl.textContent = '⏳ Cek...';
+      try {
+        const resp = await chrome.runtime.sendMessage({ action: 'CHECK_FOR_UPDATE_NOW' });
+        if (resp && resp.updateInfo) {
+          showUpdateBanner(resp.updateInfo);
+          popVerEl.textContent = orig;
+        } else {
+          popVerEl.textContent = '✓ Terbaru';
+          setTimeout(() => { popVerEl.textContent = orig; }, 2500);
+        }
+      } catch (e) {
+        popVerEl.textContent = orig;
+      }
+    });
+  }
+
   // ========================================
   // Helper functions
   // ========================================
