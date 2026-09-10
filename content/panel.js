@@ -84,6 +84,68 @@ function buildCSV(output) {
   return '\uFEFF' + csv; // BOM untuk Excel
 }
 
+/**
+ * Buat string Tab-Separated Values (TSV) dari output.
+ * Bisa langsung Ctrl+V ke Google Sheets / Excel tanpa instalasi apapun.
+ */
+function buildTSV(output) {
+  const T = '\t'; // tab
+  const N = '\n'; // newline
+  const esc = (v) => String(v ?? '').replace(/\t/g, ' ').replace(/\n/g, ' ');
+
+  let tsv = '';
+
+  // ── Sheet 1: Info Produk ──────────────────────────────────────
+  tsv += '=== INFO PRODUK ===' + N;
+  tsv += 'Field' + T + 'Value' + N;
+  tsv += 'Nama Produk'        + T + esc(output.product?.name)         + N;
+  tsv += 'Harga Min'          + T + (output.product?.price_min || 0)  + N;
+  tsv += 'Harga Max'          + T + (output.product?.price_max || 0)  + N;
+  tsv += 'Rating'             + T + (output.product?.rating || 0)     + N;
+  tsv += 'Total Terjual'      + T + (output.product?.total_sold || 0) + N;
+  tsv += 'Jumlah Ulasan'      + T + (output.product?.review_count || 0) + N;
+  tsv += 'Terjual / Bulan'    + T + (output.monthly_sold?.value || 0) + N;
+  tsv += 'Sumber Sold/Bulan'  + T + esc(output.monthly_sold?.source)  + N;
+  tsv += 'Omset Quick'        + T + (output.omset?.quick_value || 0)  + N;
+  tsv += 'Omset Detail'       + T + (output.omset?.detail_value || 0) + N;
+  tsv += 'Faktor Koreksi'     + T + (output.omset?.correction_factor || 0) + N;
+  tsv += 'Sumber Quick'       + T + esc(output.omset?.sold_per_month_source) + N;
+  tsv += 'URL'                + T + esc(output.url)                   + N;
+  tsv += 'Waktu Scraping'     + T + esc(output.scraped_at)            + N;
+
+  if (output.shop) {
+    tsv += N + '=== INFO TOKO ===' + N;
+    tsv += 'Field' + T + 'Value' + N;
+    tsv += 'Nama Toko'       + T + esc(output.shop.name)            + N;
+    tsv += 'Lokasi'          + T + esc(output.shop.location)         + N;
+    tsv += 'Pengikut'        + T + (output.shop.follower_count || 0) + N;
+    tsv += 'Jumlah Produk'   + T + (output.shop.product_count || 0) + N;
+    tsv += 'Rating Toko'     + T + (output.shop.rating_star || 0)   + N;
+    tsv += 'Status'          + T + (output.shop.is_mall ? 'Mall' : output.shop.is_preferred ? 'Star+' : 'Regular') + N;
+  }
+
+  if (output.variants?.length) {
+    tsv += N + '=== VARIAN ===' + N;
+    tsv += 'Tier 1' + T + 'Tier 2' + T + '% Terjual' + T + 'Harga' + N;
+    const sortedV = [...output.variants].sort((a, b) => (b.sales_percentage || 0) - (a.sales_percentage || 0));
+    sortedV.forEach(v => {
+      tsv += esc(v.tier1 || '-') + T + esc(v.tier2 || '-') + T + (v.sales_percentage || 0) + '%' + T + (v.price || '-') + N;
+    });
+  }
+
+  const reviewData = output.filtered_reviews || output.negative_reviews || [];
+  if (reviewData.length) {
+    const filterLabel = output.star_filter_label ? ` (${output.star_filter_label})` : '';
+    tsv += N + `=== REVIEW${filterLabel} ===` + N;
+    tsv += 'Bintang' + T + 'Tanggal' + T + 'User' + T + 'Varian' + T + 'Komentar' + N;
+    reviewData.forEach(r => {
+      tsv += (r.stars || '') + T + esc(r.date) + T + esc(r.user) + T + esc(r.variant || '-') + T + esc(r.comment) + N;
+    });
+  }
+
+  return tsv;
+}
+
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -255,6 +317,26 @@ function createPanel() {
       .btn.primary:hover { background: #d73d1e; }
       .btn:disabled { opacity: .55; cursor: not-allowed; transform: none; }
 
+      /* Confidence badge untuk estimasi omset */
+      .confidence-badge {
+        display: inline-block;
+        font-size: 9px;
+        font-weight: 700;
+        padding: 2px 7px;
+        border-radius: 999px;
+        margin-top: 4px;
+        letter-spacing: .3px;
+        text-transform: uppercase;
+      }
+      .confidence-badge.high   { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+      .confidence-badge.medium { background: #fff8e1; color: #f57f17; border: 1px solid #ffe082; }
+      .confidence-badge.low    { background: #fce4ec; color: #c62828; border: 1px solid #ef9a9a; }
+      .confidence-badge.none   { background: #f5f5f5; color: #9e9e9e; border: 1px solid #e0e0e0; }
+
+      /* Tombol copy TSV */
+      .btn.tsv { border-color: #1565c0; color: #1565c0; font-size: 11px; }
+      .btn.tsv:hover { background: #e3f2fd; border-color: #0d47a1; color: #0d47a1; }
+
       .section-title {
         display: flex;
         align-items: center;
@@ -324,6 +406,7 @@ function createPanel() {
           <button class="btn" id="btnFetchExtra" style="border-color:#1890ff; color:#1890ff;">⚡ Info Terjual & Toko</button>
           <button class="btn" id="btnJSON">📄 JSON</button>
           <button class="btn" id="btnCSV">📊 CSV</button>
+          <button class="btn tsv" id="btnTSV" title="Salin data dalam format Tab-Separated (TSV) — langsung Ctrl+V ke Google Sheets atau Excel">📋 Salin ke Sheets</button>
         </div>
 
         <!-- Nama Produk -->
@@ -398,6 +481,7 @@ function createPanel() {
             <div class="k">Omset / Bulan (Quick) 💨</div>
             <div class="v" id="omsetQuick">—</div>
             <div style="font-size:9px; color:#888; margin-top:2px;" id="omsetQuickNote"></div>
+            <span class="confidence-badge none" id="omsetQuickConfidence">belum ada data</span>
           </div>
         </div>
         <div class="grid" style="margin-top:0;">
@@ -405,13 +489,15 @@ function createPanel() {
             <div class="k">Omset 30 Hari (Detail) 📊</div>
             <div class="v" id="omsetDetail">—</div>
             <div style="font-size:9px; color:#888; margin-top:2px;" id="omsetDetailNote"></div>
+            <span class="confidence-badge none" id="omsetDetailConfidence">belum ada data</span>
           </div>
         </div>
         <div class="data-source-note" style="margin-bottom:10px;">
-          <strong>ℹ️ Metode:</strong>
+          <strong>ℹ️ Tingkat Keyakinan:</strong>
           <ul>
-            <li><b>Quick:</b> Terjual/Bulan × Harga Rata-rata</li>
-            <li><b>Detail:</b> Review 30hr × Harga Varian × Koreksi</li>
+            <li><b style="color:#2e7d32">● Tinggi:</b> Terjual/Bulan dari API resmi Shopee</li>
+            <li><b style="color:#f57f17">● Sedang:</b> Terjual/Bulan dari Search API (cache)</li>
+            <li><b style="color:#c62828">● Rendah:</b> Estimasi dari rasio review × koreksi</li>
           </ul>
         </div>
 
@@ -594,7 +680,17 @@ function render(shadow, output) {
   const omsetDetailEl = shadow.getElementById('omsetDetail');
   const omsetQuickNote = shadow.getElementById('omsetQuickNote');
   const omsetDetailNote = shadow.getElementById('omsetDetailNote');
+  const omsetQuickBadge = shadow.getElementById('omsetQuickConfidence');
+  const omsetDetailBadge = shadow.getElementById('omsetDetailConfidence');
   const omset = output.omset || {};
+
+  // Helper: tentukan confidence level berdasarkan sumber data
+  function getQuickConfidence(src) {
+    if (src === 'API') return { level: 'high', label: '● Tinggi — API resmi Shopee' };
+    if (src === 'SEARCH_API') return { level: 'medium', label: '● Sedang — Search API (cache)' };
+    if (src === 'ESTIMATED') return { level: 'low', label: '● Rendah — Estimasi dari review' };
+    return { level: 'none', label: 'belum ada data' };
+  }
 
   if (omsetQuickEl) {
     if (omset.quick_value > 0) {
@@ -603,9 +699,15 @@ function render(shadow, output) {
         ? `~${Number(omset.sold_per_month || 0).toLocaleString('id-ID')} unit (est.) \u00d7 ${formatRupiah(omset.avg_price || 0)}`
         : `${Number(omset.sold_per_month || 0).toLocaleString('id-ID')} unit \u00d7 ${formatRupiah(omset.avg_price || 0)}`;
       if (omsetQuickNote) omsetQuickNote.textContent = srcLabel;
+      if (omsetQuickBadge) {
+        const conf = getQuickConfidence(omset.sold_per_month_source);
+        omsetQuickBadge.textContent = conf.label;
+        omsetQuickBadge.className = `confidence-badge ${conf.level}`;
+      }
     } else {
       omsetQuickEl.textContent = '\u2014';
       if (omsetQuickNote) omsetQuickNote.textContent = 'Belum ada data (scrape dulu)';
+      if (omsetQuickBadge) { omsetQuickBadge.textContent = 'belum ada data'; omsetQuickBadge.className = 'confidence-badge none'; }
     }
   }
 
@@ -613,9 +715,19 @@ function render(shadow, output) {
     if (omset.detail_value > 0) {
       omsetDetailEl.textContent = formatRupiah(omset.detail_value);
       if (omsetDetailNote) omsetDetailNote.textContent = `${omset.reviews_30d || 0} review (30hr), koreksi ${omset.correction_factor || '?'}\u00d7`;
+      if (omsetDetailBadge) {
+        // Detail selalu berbasis review — keyakinannya Sedang jika ada review real, Rendah jika estimasi
+        const detailConf = (omset.reviews_30d_with_price > 0) ? 'medium' : 'low';
+        const detailLabel = (omset.reviews_30d_with_price > 0)
+          ? '● Sedang — dari harga varian review'
+          : '● Rendah — harga rata-rata × koreksi';
+        omsetDetailBadge.textContent = detailLabel;
+        omsetDetailBadge.className = `confidence-badge ${detailConf}`;
+      }
     } else {
       omsetDetailEl.textContent = '\u2014';
       if (omsetDetailNote) omsetDetailNote.textContent = 'Belum ada review dalam 30 hari terakhir';
+      if (omsetDetailBadge) { omsetDetailBadge.textContent = 'belum ada data'; omsetDetailBadge.className = 'confidence-badge none'; }
     }
   }
 
@@ -956,6 +1068,44 @@ async function mountPanel() {
     const output = ShopeeParser.buildOutput(product, neg, saved.url || location.href, saved.rawShop || null, saved.monthlySoldFromSearch || null, sfCSV);
     const blob = new Blob([buildCSV(output)], { type: 'text/csv;charset=utf-8;' });
     downloadBlob(blob, `shopee_${Date.now()}.csv`);
+  });
+
+  // ── Tombol Salin ke Sheets (TSV) ──
+  shadow.getElementById('btnTSV').addEventListener('click', async () => {
+    const saved = await getScraperData();
+    if (!saved?.rawProduct) {
+      alert('Belum ada data — jalankan Scrape dulu.');
+      return;
+    }
+    const sfTSV = await new Promise(resolve => {
+      chrome.storage.local.get('shopeeStarFilter', (res) => {
+        const sf = res.shopeeStarFilter;
+        resolve((sf && Array.isArray(sf) && sf.length > 0) ? sf : [1,2,3,4,5]);
+      });
+    });
+    const product = ShopeeParser.parseProduct(saved.rawProduct);
+    const neg = ShopeeParser.parseNegativeReviews(saved.rawReviews || [], product?.variants || [], sfTSV);
+    const output = ShopeeParser.buildOutput(product, neg, saved.url || location.href, saved.rawShop || null, saved.monthlySoldFromSearch || null, sfTSV);
+    const tsvString = buildTSV(output);
+
+    const btnTSV = shadow.getElementById('btnTSV');
+    try {
+      await navigator.clipboard.writeText(tsvString);
+      btnTSV.textContent = '✅ Tersalin!';
+      btnTSV.style.borderColor = '#2e7d32';
+      btnTSV.style.color = '#2e7d32';
+    } catch (e) {
+      // Fallback: buat file TSV dan download
+      const blob = new Blob([tsvString], { type: 'text/plain;charset=utf-8;' });
+      downloadBlob(blob, `shopee_${Date.now()}.tsv`);
+      btnTSV.textContent = '⬇️ Diunduh (.tsv)';
+    } finally {
+      setTimeout(() => {
+        btnTSV.textContent = '📋 Salin ke Sheets';
+        btnTSV.style.borderColor = '';
+        btnTSV.style.color = '';
+      }, 2500);
+    }
   });
 
   // Shadow aktif dipakai listener storage global di bawah

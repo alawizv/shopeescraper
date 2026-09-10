@@ -193,6 +193,31 @@
         </div>
       </section>
 
+      <!-- Estimasi Omset -->
+      <section class="section" id="omset-section">
+        <h2 class="section-title">💰 Estimasi Omset</h2>
+        <div class="info-grid monthly-sales-grid">
+          <div class="info-card monthly-sales-card">
+            <div class="info-card-label">Omset / Bulan (Quick) 💨</div>
+            <div id="popup-omset-quick" class="info-card-value monthly-sold-value">-</div>
+            <div id="popup-omset-quick-badge" class="data-source-badge">belum ada data</div>
+          </div>
+          <div class="info-card monthly-sales-card">
+            <div class="info-card-label">Omset 30 Hari (Detail) 📊</div>
+            <div id="popup-omset-detail" class="info-card-value monthly-sold-value">-</div>
+            <div id="popup-omset-detail-badge" class="data-source-badge">belum ada data</div>
+          </div>
+        </div>
+        <div class="data-source-note">
+          <strong>ℹ️ Tingkat Keyakinan:</strong>
+          <ul>
+            <li><b style="color:#2e7d32">● Tinggi:</b> Terjual/Bulan dari API resmi Shopee</li>
+            <li><b style="color:#f57f17">● Sedang:</b> Terjual/Bulan dari Search API (cache)</li>
+            <li><b style="color:#c62828">● Rendah:</b> Estimasi dari rasio review × koreksi</li>
+          </ul>
+        </div>
+      </section>
+
       <!-- Info Toko -->
       <section class="section" id="shop-info-section">
         <h2 class="section-title">🏪 Info Toko</h2>
@@ -240,6 +265,9 @@
           </button>
           <button id="btn-export-csv" class="btn btn-export">
             📊 CSV
+          </button>
+          <button id="btn-export-tsv" class="btn btn-export" title="Salin data (TSV) ke clipboard — langsung Ctrl+V ke Google Sheets atau Excel, tanpa setup">
+            📋 Salin ke Sheets
           </button>
           <button id="btn-export-sheets" class="btn btn-export btn-sheets">
             📗 Google Sheets

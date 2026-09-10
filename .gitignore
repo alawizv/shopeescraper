@@ -1,0 +1,9 @@
+﻿# Debug / scratch files — jangan di-commit ke repo utama
+dev/
+
+# Node modules (jika ada dependency tooling)
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db

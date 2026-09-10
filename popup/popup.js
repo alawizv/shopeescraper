@@ -37,6 +37,7 @@
     btnFetchExtra: document.getElementById('btn-fetch-extra'),
     btnExportJSON: document.getElementById('btn-export-json'),
     btnExportCSV: document.getElementById('btn-export-csv'),
+    btnExportTSV: document.getElementById('btn-export-tsv'),
     btnExportSheets: document.getElementById('btn-export-sheets'),
 
     productName: document.getElementById('product-name'),
@@ -275,6 +276,31 @@
       showExportStatus('✅ File CSV berhasil diunduh', 'success');
     });
 
+    if (elements.btnExportTSV) {
+      elements.btnExportTSV.addEventListener('click', async () => {
+        if (!currentData) {
+          showExportStatus('Tidak ada data untuk diekspor', 'error');
+          return;
+        }
+        const tsvString = buildTSV(currentData);
+        try {
+          await navigator.clipboard.writeText(tsvString);
+          showExportStatus('✅ Data tersalin! Buka Google Sheets atau Excel → Ctrl+V', 'success');
+          elements.btnExportTSV.textContent = '✅ Tersalin!';
+          setTimeout(() => { elements.btnExportTSV.textContent = '📋 Salin ke Sheets'; }, 2500);
+        } catch (e) {
+          // Fallback: unduh file .tsv
+          const blob = new Blob([tsvString], { type: 'text/plain;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = `shopee_${Date.now()}.tsv`;
+          document.body.appendChild(a); a.click(); a.remove();
+          URL.revokeObjectURL(url);
+          showExportStatus('⬇️ File TSV diunduh (clipboard tidak tersedia)', 'info');
+        }
+      });
+    }
+
     elements.btnExportSheets.addEventListener('click', async () => {
       if (!currentData) {
         showExportStatus('Tidak ada data untuk diekspor', 'error');
@@ -453,7 +479,7 @@
   }
 
   /**
-   * Render data Terjual / Bulan
+   * Render data Terjual / Bulan + Estimasi Omset dengan confidence badge
    */
   function renderMonthlySales(product, rawData) {
     let monthlySold = 0;
@@ -462,16 +488,16 @@
     // Prioritas 1: sold_per_month_actual dari PDP API
     if (product && product.sold_per_month_actual > 0) {
       monthlySold = product.sold_per_month_actual;
-      sourceText = '✅ Sumber: PDP API (field "sold")';
+      sourceText = '✅ PDP API (● Tinggi)';
     }
     // Prioritas 2: monthlySoldFromSearch dari Search API
     else if (rawData && rawData.monthlySoldFromSearch > 0) {
       monthlySold = rawData.monthlySoldFromSearch;
-      sourceText = '✅ Sumber: Search API (cache)';
+      sourceText = '✅ Search API (● Sedang)';
     }
     // Prioritas 3: Tidak ada data
     else {
-      sourceText = '⚠️ Data belum tersedia — refresh halaman atau browse produk lain dulu';
+      sourceText = '⚠️ Belum tersedia — refresh atau browse produk lain dulu';
     }
 
     if (elements.monthlySoldValue) {
@@ -484,6 +510,41 @@
       elements.monthlySoldSource.className = monthlySold > 0
         ? 'data-source-badge active'
         : 'data-source-badge';
+    }
+
+    // ── Render estimasi omset di bawah monthly sold (jika elemen ada) ──
+    const omset = currentData?.omset || {};
+    const omsetQuickEl = document.getElementById('popup-omset-quick');
+    const omsetDetailEl = document.getElementById('popup-omset-detail');
+    const omsetQuickBadgeEl = document.getElementById('popup-omset-quick-badge');
+    const omsetDetailBadgeEl = document.getElementById('popup-omset-detail-badge');
+
+    if (omsetQuickEl) {
+      if (omset.quick_value > 0) {
+        omsetQuickEl.textContent = formatRupiah(omset.quick_value);
+        const conf = getOmsetConfidence(omset.sold_per_month_source);
+        if (omsetQuickBadgeEl) {
+          omsetQuickBadgeEl.textContent = conf.label;
+          omsetQuickBadgeEl.className = `data-source-badge omset-confidence-${conf.level}`;
+        }
+      } else {
+        omsetQuickEl.textContent = '-';
+        if (omsetQuickBadgeEl) { omsetQuickBadgeEl.textContent = 'belum ada data'; omsetQuickBadgeEl.className = 'data-source-badge'; }
+      }
+    }
+    if (omsetDetailEl) {
+      if (omset.detail_value > 0) {
+        omsetDetailEl.textContent = formatRupiah(omset.detail_value);
+        const detailConf = (omset.reviews_30d_with_price > 0) ? 'medium' : 'low';
+        const detailLabel = (omset.reviews_30d_with_price > 0) ? '● Sedang — harga varian review' : '● Rendah — harga rata-rata × koreksi';
+        if (omsetDetailBadgeEl) {
+          omsetDetailBadgeEl.textContent = detailLabel;
+          omsetDetailBadgeEl.className = `data-source-badge omset-confidence-${detailConf}`;
+        }
+      } else {
+        omsetDetailEl.textContent = '-';
+        if (omsetDetailBadgeEl) { omsetDetailBadgeEl.textContent = 'belum ada data'; omsetDetailBadgeEl.className = 'data-source-badge'; }
+      }
     }
   }
 
@@ -627,6 +688,75 @@
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'JT';
     if (num >= 1000) return (num / 1000).toFixed(1) + 'RB';
     return num.toString();
+  }
+
+  /**
+   * Helper: tentukan confidence level untuk estimasi omset Quick
+   */
+  function getOmsetConfidence(source) {
+    if (source === 'API')         return { level: 'high',   label: '● Tinggi — API resmi Shopee' };
+    if (source === 'SEARCH_API')  return { level: 'medium', label: '● Sedang — Search API (cache)' };
+    if (source === 'ESTIMATED')   return { level: 'low',    label: '● Rendah — Estimasi dari review' };
+    return { level: 'none', label: 'Belum ada data' };
+  }
+
+  /**
+   * Buat string TSV siap tempel ke Google Sheets / Excel
+   */
+  function buildTSV(data) {
+    const T = '\t';
+    const N = '\n';
+    const esc = (v) => String(v ?? '').replace(/\t/g, ' ').replace(/\n/g, ' ');
+
+    let tsv = '';
+    tsv += '=== INFO PRODUK ===' + N;
+    tsv += 'Field' + T + 'Value' + N;
+    tsv += 'Nama Produk'        + T + esc(data.product?.name)              + N;
+    tsv += 'Harga Min'          + T + (data.product?.price_min || 0)       + N;
+    tsv += 'Harga Max'          + T + (data.product?.price_max || 0)       + N;
+    tsv += 'Rating'             + T + (data.product?.rating || 0)          + N;
+    tsv += 'Total Terjual'      + T + (data.product?.total_sold || 0)      + N;
+    tsv += 'Jumlah Ulasan'      + T + (data.product?.review_count || 0)    + N;
+    tsv += 'Terjual / Bulan'    + T + (data.monthly_sold?.value || 0)      + N;
+    tsv += 'Sumber Sold/Bulan'  + T + esc(data.monthly_sold?.source)       + N;
+    tsv += 'Omset Quick'        + T + (data.omset?.quick_value || 0)       + N;
+    tsv += 'Omset Detail'       + T + (data.omset?.detail_value || 0)      + N;
+    tsv += 'Faktor Koreksi'     + T + (data.omset?.correction_factor || 0) + N;
+    tsv += 'Sumber Quick'       + T + esc(data.omset?.sold_per_month_source) + N;
+    tsv += 'URL'                + T + esc(data.url)                        + N;
+    tsv += 'Waktu Scraping'     + T + esc(data.scraped_at)                 + N;
+
+    if (data.shop) {
+      tsv += N + '=== INFO TOKO ===' + N;
+      tsv += 'Field' + T + 'Value' + N;
+      tsv += 'Nama Toko'       + T + esc(data.shop.name)              + N;
+      tsv += 'Lokasi'          + T + esc(data.shop.location)           + N;
+      tsv += 'Pengikut'        + T + (data.shop.follower_count || 0)  + N;
+      tsv += 'Jumlah Produk'   + T + (data.shop.product_count || 0)  + N;
+      tsv += 'Rating Toko'     + T + (data.shop.rating_star || 0)    + N;
+      tsv += 'Status'          + T + (data.shop.is_mall ? 'Mall' : data.shop.is_preferred ? 'Star+' : 'Regular') + N;
+    }
+
+    if (data.variants?.length) {
+      tsv += N + '=== VARIAN ===' + N;
+      tsv += 'Tier 1' + T + 'Tier 2' + T + '% Terjual' + T + 'Harga' + N;
+      const sorted = [...data.variants].sort((a, b) => (b.sales_percentage || 0) - (a.sales_percentage || 0));
+      sorted.forEach(v => {
+        tsv += esc(v.tier1 || '-') + T + esc(v.tier2 || '-') + T + (v.sales_percentage || 0) + '%' + T + (v.price || '-') + N;
+      });
+    }
+
+    const reviews = data.filtered_reviews || data.negative_reviews || [];
+    if (reviews.length) {
+      const filterLabel = data.star_filter_label ? ` (${data.star_filter_label})` : '';
+      tsv += N + `=== REVIEW${filterLabel} ===` + N;
+      tsv += 'Bintang' + T + 'Tanggal' + T + 'User' + T + 'Varian' + T + 'Komentar' + N;
+      reviews.forEach(r => {
+        tsv += (r.stars || '') + T + esc(r.date) + T + esc(r.user) + T + esc(r.variant || '-') + T + esc(r.comment) + N;
+      });
+    }
+
+    return tsv;
   }
 
   function escapeHTML(str) {
