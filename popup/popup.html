@@ -24,264 +24,293 @@
       <a id="update-banner-link" href="https://github.com/alawizv/shopeescraper" target="_blank" class="update-banner-link">Cara Update →</a>
     </div>
 
-    <!-- Pesan jika bukan halaman produk -->
-    <div id="not-product-page" class="message-box warning d-none">
-      <p>⚠️ Buka halaman produk Shopee terlebih dahulu.</p>
-      <p class="hint">Contoh: shopee.co.id/nama-produk-i.123456.789012</p>
+    <!-- Tab Navigasi Popup -->
+    <div class="popup-tabs">
+      <button class="popup-tab active" id="popup-tab-active">📦 Produk Aktif</button>
+      <button class="popup-tab" id="popup-tab-history">📜 Riwayat <span class="tab-badge" id="popup-history-count">0</span></button>
     </div>
 
-    <!-- Pesan error -->
-    <div id="error-message" class="message-box error d-none">
-      <p id="error-text"></p>
-    </div>
-
-    <!-- Konten utama -->
-    <div id="main-content" class="d-none">
-
-      <!-- Tombol aksi -->
-      <div class="action-bar">
-        <div style="display: flex; gap: 8px;">
-          <button id="btn-scrape" class="btn btn-primary" style="flex: 1;">
-            🔄 Scrape Data
-          </button>
-          <button id="btn-stop" class="btn" style="flex: 1; display: none; background-color: #ff4d4f; border-color: #ff4d4f; color: white;">
-            🛑 Stop
-          </button>
-        </div>
-        <button id="btn-fetch-extra" class="btn" style="width: 100%; margin-top: 8px; background-color: #f1f8ff; border: 1px solid #1890ff; color: #1890ff;">
-          ⚡ Muat Info Terjual & Toko
-        </button>
+    <!-- View: Produk Aktif -->
+    <div id="view-active-product">
+      <!-- Pesan jika bukan halaman produk -->
+      <div id="not-product-page" class="message-box warning d-none">
+        <p>⚠️ Buka halaman produk Shopee terlebih dahulu.</p>
+        <p class="hint">Contoh: shopee.co.id/nama-produk-i.123456.789012</p>
       </div>
 
-      <!-- Filter Bintang Review -->
-      <div class="star-filter-section">
-        <div class="star-filter-header">
-          <span class="star-filter-icon">⭐</span>
-          <span class="star-filter-title">Filter Bintang Review:</span>
-        </div>
-        <div class="star-filter-options">
-          <label class="star-filter-label">
-            <input type="checkbox" class="star-filter-cb" value="5" checked>
-            <span class="star-badge star-5">5★</span>
-          </label>
-          <label class="star-filter-label">
-            <input type="checkbox" class="star-filter-cb" value="4" checked>
-            <span class="star-badge star-4">4★</span>
-          </label>
-          <label class="star-filter-label">
-            <input type="checkbox" class="star-filter-cb" value="3" checked>
-            <span class="star-badge star-3">3★</span>
-          </label>
-          <label class="star-filter-label">
-            <input type="checkbox" class="star-filter-cb" value="2" checked>
-            <span class="star-badge star-2">2★</span>
-          </label>
-          <label class="star-filter-label">
-            <input type="checkbox" class="star-filter-cb" value="1" checked>
-            <span class="star-badge star-1">1★</span>
-          </label>
-        </div>
-        <div class="star-filter-note" id="star-filter-note">Pilih bintang yang ingin diambil reviewnya (hanya review dengan teks min. 10 kata)</div>
+      <!-- Pesan error -->
+      <div id="error-message" class="message-box error d-none">
+        <p id="error-text"></p>
       </div>
 
-      <!-- Info Produk -->
-      <section class="section">
-        <h2 class="section-title">📦 Info Produk</h2>
-        <div class="product-info">
-          <div class="info-row">
-            <span class="info-label">Nama:</span>
-            <span id="product-name" class="info-value product-name">-</span>
-          </div>
-          <div class="info-grid">
-            <div class="info-card">
-              <div class="info-card-label">Harga</div>
-              <div id="product-price" class="info-card-value">-</div>
-            </div>
-            <div class="info-card">
-              <div class="info-card-label">Rating</div>
-              <div id="product-rating" class="info-card-value">-</div>
-            </div>
-            <div class="info-card">
-              <div class="info-card-label">Terjual</div>
-              <div id="product-sold" class="info-card-value">-</div>
-            </div>
-            <div class="info-card">
-              <div class="info-card-label">Ulasan</div>
-              <div id="product-reviews" class="info-card-value">-</div>
-            </div>
+      <!-- Konten utama -->
+      <div id="main-content" class="d-none">
+
+        <!-- Tombol aksi -->
+        <div class="action-bar">
+          <div style="display: flex; gap: 8px;">
+            <button id="btn-scrape" class="btn btn-primary" style="flex: 1;">
+              🔄 Scrape Data
+            </button>
+            <button id="btn-stop" class="btn btn-danger d-none" style="flex: 1;">
+              🛑 Stop
+            </button>
+            <button id="btn-fetch-extra" class="btn btn-secondary" style="flex: 1;" title="Ambil Terjual/Bulan &amp; Info Toko via API langsung">
+              ⚡ Muat Info Terjual &amp; Toko
+            </button>
           </div>
         </div>
-      </section>
 
-      <!-- Sampel Review -->
-      <section class="section" id="review-sample-section">
-        <h2 class="section-title">📋 Sampel Review <span id="review-filter-badge" class="badge" style="font-size:9px; background:#ff6b35; color:white; padding:2px 5px; border-radius:8px; display:none;"></span></h2>
-        <div id="reviewSampleWrap" class="muted">Belum ada ulasan yang ter-scrape</div>
-        <div id="reviewSampleTableWrap" style="display:none;">
-          <table class="data-table">
-            <tbody>
-              <tr>
-                <td>Review Terscrape (Unik)</td>
-                <td id="sample-scraped" style="text-align: right; font-weight: 600;">0</td>
-              </tr>
-              <tr>
-                <td>Review dengan Teks</td>
-                <td id="sample-with-text" style="text-align: right; font-weight: 600;">0</td>
-              </tr>
-              <tr>
-                <td>Total Ulasan (Shopee)</td>
-                <td id="sample-total" style="text-align: right; font-weight: 600;">0</td>
-              </tr>
-              <tr>
-                <td>Cakupan Sampel</td>
-                <td id="sample-coverage" style="text-align: right; font-weight: 600;">0%</td>
-              </tr>
-              <tr>
-                <td>Varian Unik Ditemukan</td>
-                <td id="sample-variants" style="text-align: right; font-weight: 600;">0</td>
-              </tr>
-            </tbody>
-          </table>
-          <div id="sample-note" style="font-size:9.5px; color:#888; font-style:italic; margin-top:6px; padding:4px; border-radius:4px; background:#f9f9f9; text-align:center;">
+        <!-- Filter Bintang Review -->
+        <div class="star-filter-container">
+          <div class="star-filter-header">
+            <span class="star-filter-title">⭐ Filter Bintang Review</span>
+            <div class="star-filter-actions">
+              <button type="button" id="btn-filter-all" class="star-filter-btn">Semua</button>
+              <button type="button" id="btn-filter-negative" class="star-filter-btn">Negatif (1-3★)</button>
+              <button type="button" id="btn-filter-1star" class="star-filter-btn">1★ Saja</button>
+            </div>
           </div>
+          <div class="star-checkboxes">
+            <label class="star-filter-label">
+              <input type="checkbox" class="star-filter-cb" value="5" checked>
+              <span class="star-badge star-5">5★</span>
+            </label>
+            <label class="star-filter-label">
+              <input type="checkbox" class="star-filter-cb" value="4" checked>
+              <span class="star-badge star-4">4★</span>
+            </label>
+            <label class="star-filter-label">
+              <input type="checkbox" class="star-filter-cb" value="3" checked>
+              <span class="star-badge star-3">3★</span>
+            </label>
+            <label class="star-filter-label">
+              <input type="checkbox" class="star-filter-cb" value="2" checked>
+              <span class="star-badge star-2">2★</span>
+            </label>
+            <label class="star-filter-label">
+              <input type="checkbox" class="star-filter-cb" value="1" checked>
+              <span class="star-badge star-1">1★</span>
+            </label>
+          </div>
+          <div class="star-filter-note" id="star-filter-note">Pilih bintang yang ingin diambil reviewnya (hanya review dengan teks min. 10 kata)</div>
         </div>
-      </section>
 
+        <!-- Info Produk -->
+        <section class="section">
+          <h2 class="section-title">📦 Info Produk</h2>
+          <div class="product-info">
+            <div class="info-row">
+              <span class="info-label">Nama:</span>
+              <span id="product-name" class="info-value product-name">-</span>
+            </div>
+            <div class="info-grid">
+              <div class="info-card">
+                <div class="info-card-label">Harga</div>
+                <div id="product-price" class="info-card-value">-</div>
+              </div>
+              <div class="info-card">
+                <div class="info-card-label">Rating</div>
+                <div id="product-rating" class="info-card-value">-</div>
+              </div>
+              <div class="info-card">
+                <div class="info-card-label">Terjual</div>
+                <div id="product-sold" class="info-card-value">-</div>
+              </div>
+              <div class="info-card">
+                <div class="info-card-label">Ulasan</div>
+                <div id="product-reviews" class="info-card-value">-</div>
+              </div>
+            </div>
+          </div>
+        </section>
 
-      <!-- Varian -->
-      <section class="section">
-        <h2 class="section-title">
-          🎨 Varian
-          <span id="variant-count" class="badge">0</span>
-        </h2>
-        <div id="variant-container">
-          <p class="empty-text" id="no-variants">Tidak ada data varian</p>
-          
-          <!-- V1 Style Tier Summaries (Persentase Per Opsi) -->
-          <div id="tierSummariesWrap" style="margin-bottom: 15px; display: none;"></div>
-
-          <div id="variant-table-wrapper" class="d-none">
-            <table class="data-table" id="variant-table">
-              <thead>
+        <!-- Sampel Review -->
+        <section class="section" id="review-sample-section">
+          <h2 class="section-title">📋 Sampel Review <span id="review-filter-badge" class="badge" style="font-size:9px; background:#ff6b35; color:white; padding:2px 5px; border-radius:8px; display:none;"></span></h2>
+          <div id="reviewSampleWrap" class="muted">Belum ada ulasan yang ter-scrape</div>
+          <div id="reviewSampleTableWrap" style="display:none;">
+            <table class="data-table">
+              <tbody>
                 <tr>
-                  <th>Tier 1</th>
-                  <th>Tier 2</th>
-                  <th>% Terjual</th>
-                  <th>Harga</th>
+                  <td>Review Terscrape (Unik)</td>
+                  <td id="sample-scraped" style="text-align: right; font-weight: 600;">0</td>
                 </tr>
-              </thead>
-              <tbody id="variant-tbody">
+                <tr>
+                  <td>Review dengan Teks</td>
+                  <td id="sample-with-text" style="text-align: right; font-weight: 600;">0</td>
+                </tr>
+                <tr>
+                  <td>Total Ulasan (Shopee)</td>
+                  <td id="sample-total" style="text-align: right; font-weight: 600;">0</td>
+                </tr>
+                <tr>
+                  <td>Cakupan Sampel</td>
+                  <td id="sample-coverage" style="text-align: right; font-weight: 600;">0%</td>
+                </tr>
+                <tr>
+                  <td>Varian Unik Ditemukan</td>
+                  <td id="sample-variants" style="text-align: right; font-weight: 600;">0</td>
+                </tr>
               </tbody>
             </table>
+            <div id="sample-note" style="font-size: 10px; color: #888; font-style: italic; margin-top: 6px; padding: 4px; border-radius: 4px; background: #f0f0f0; text-align: center;"></div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <!-- Terjual/Bulan -->
-      <section class="section" id="monthly-sales-section">
-        <h2 class="section-title">📈 Terjual / Bulan</h2>
-        <div id="monthlySalesWrap">
-          <div class="info-grid monthly-sales-grid">
-            <div class="info-card monthly-sales-card">
-              <div class="info-card-label">Penjualan Bulanan</div>
-              <div id="monthly-sold-value" class="info-card-value monthly-sold-value">-</div>
-              <div id="monthly-sold-source" class="data-source-badge">Belum tersedia</div>
+        <!-- Varian Produk -->
+        <section class="section" id="variants-section">
+          <h2 class="section-title">
+            <span>🎨 Varian Produk</span>
+            <span id="variant-count" class="badge">0</span>
+          </h2>
+          <div id="variants-wrap">
+            <p class="empty-text" id="no-variants">Data varian belum tersedia.</p>
+            
+            <!-- V1 Style Tier Summaries (Persentase Per Opsi) -->
+            <div id="tierSummariesWrap" style="margin-bottom: 15px; display: none;"></div>
+
+            <div id="variant-table-wrapper" class="d-none">
+              <table class="data-table" id="variant-table">
+                <thead>
+                  <tr>
+                    <th>Tier 1</th>
+                    <th>Tier 2</th>
+                    <th>% Terjual</th>
+                    <th>Harga</th>
+                  </tr>
+                </thead>
+                <tbody id="variant-tbody">
+                </tbody>
+              </table>
             </div>
           </div>
-          <div class="data-source-note" id="monthly-sold-note">
-            <strong>ℹ️ Cara mendapatkan data ini:</strong>
-            <ul>
-              <li><b>Prioritas 1 — PDP API:</b> Diambil dari field <code>sold</code> di response API halaman produk (<code>/api/v4/pdp/get</code>). Ini adalah data riil bulanan yang ditampilkan Shopee.</li>
-              <li><b>Prioritas 2 — Search API:</b> Dari response pencarian Shopee (<code>/api/v4/search/search_items</code>) saat user browsing. Field <code>sold</code> di sini juga menunjukkan penjualan bulanan.</li>
-              <li><b>Prioritas 3 — DOM Scraping:</b> Diekstrak dari teks "X Terjual / Bulan" yang terlihat di halaman via regex.</li>
-            </ul>
-          </div>
-        </div>
-      </section>
+        </section>
 
-      <!-- Estimasi Omset -->
-      <section class="section" id="omset-section">
-        <h2 class="section-title">💰 Estimasi Omset</h2>
-        <div class="info-grid monthly-sales-grid">
-          <div class="info-card monthly-sales-card">
-            <div class="info-card-label">Omset / Bulan (Quick) 💨</div>
-            <div id="popup-omset-quick" class="info-card-value monthly-sold-value">-</div>
-            <div id="popup-omset-quick-badge" class="data-source-badge">belum ada data</div>
-          </div>
-          <div class="info-card monthly-sales-card">
-            <div class="info-card-label">Omset 30 Hari (Detail) 📊</div>
-            <div id="popup-omset-detail" class="info-card-value monthly-sold-value">-</div>
-            <div id="popup-omset-detail-badge" class="data-source-badge">belum ada data</div>
-          </div>
-        </div>
-        <div class="data-source-note">
-          <strong>ℹ️ Tingkat Keyakinan:</strong>
-          <ul>
-            <li><b style="color:#2e7d32">● Tinggi:</b> Terjual/Bulan dari API resmi Shopee</li>
-            <li><b style="color:#f57f17">● Sedang:</b> Terjual/Bulan dari Search API (cache)</li>
-            <li><b style="color:#c62828">● Rendah:</b> Estimasi dari rasio review × koreksi</li>
-          </ul>
-        </div>
-      </section>
-
-      <!-- Info Toko -->
-      <section class="section" id="shop-info-section">
-        <h2 class="section-title">🏪 Info Toko</h2>
-        <div id="shopInfoWrap">
-          <p class="empty-text" id="no-shop-data">Data toko belum tersedia. Klik "Scrape Data" untuk mengambil.</p>
-          <div id="shop-info-content" class="d-none">
-            <table class="data-table" id="shop-info-table">
-              <tbody id="shop-info-tbody">
-              </tbody>
-            </table>
-            <div class="data-source-note" id="shop-data-note">
+        <!-- Terjual/Bulan -->
+        <section class="section" id="monthly-sales-section">
+          <h2 class="section-title">📈 Terjual / Bulan</h2>
+          <div id="monthlySalesWrap">
+            <div class="info-grid monthly-sales-grid">
+              <div class="info-card monthly-sales-card">
+                <div class="info-card-label">Penjualan Bulanan</div>
+                <div id="monthly-sold-value" class="info-card-value monthly-sold-value">-</div>
+                <div id="monthly-sold-source" class="data-source-badge">Belum tersedia</div>
+              </div>
+            </div>
+            <div class="data-source-note" id="monthly-sold-note">
               <strong>ℹ️ Cara mendapatkan data ini:</strong>
               <ul>
-                <li><b>API Intercept:</b> Disadap dari response API toko (<code>/api/v4/shop/get_shop_detail</code>) yang dipanggil Shopee saat halaman dimuat.</li>
-                <li><b>Direct Fetch:</b> Jika intercept gagal, extension langsung memanggil API toko menggunakan <code>shop_id</code> yang diambil dari URL produk.</li>
+                <li><b>Prioritas 1 — PDP API:</b> Diambil dari field <code>sold</code> di response API halaman produk (<code>/api/v4/pdp/get</code>). Ini adalah data riil bulanan yang ditampilkan Shopee.</li>
+                <li><b>Prioritas 2 — Search API:</b> Dari response pencarian Shopee (<code>/api/v4/search/search_items</code>) saat user browsing. Field <code>sold</code> di sini juga menunjukkan penjualan bulanan.</li>
+                <li><b>Prioritas 3 — DOM Scraping:</b> Diekstrak dari teks "X Terjual / Bulan" yang terlihat di halaman via regex.</li>
               </ul>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <!-- Daftar Review Terfilter -->
-      <section class="section" id="review-list-section">
-        <h2 class="section-title">
-          <span id="review-list-title">📋 Review Terfilter</span>
-          <span id="review-list-count" class="badge" style="font-size:9px; background:#ee4d2d; color:white; padding:2px 6px; border-radius:8px;">0</span>
-        </h2>
-        <p class="empty-text" id="no-review-list">Belum ada review yang sesuai filter (min. 10 kata).</p>
-        <div id="review-list-wrapper" class="d-none" style="max-height:220px; overflow-y:auto;">
-          <table class="data-table" id="review-list-table">
-            <thead>
-              <tr><th style="width:32px;">⭐</th><th style="width:90px;">User</th><th>Komentar</th></tr>
-            </thead>
-            <tbody id="review-list-tbody"></tbody>
-          </table>
-        </div>
-      </section>
+        <!-- Estimasi Omset -->
+        <section class="section" id="omset-section">
+          <h2 class="section-title">💰 Estimasi Omset</h2>
+          <div class="info-grid monthly-sales-grid">
+            <div class="info-card monthly-sales-card">
+              <div class="info-card-label">Omset / Bulan (Quick) 💨</div>
+              <div id="popup-omset-quick" class="info-card-value monthly-sold-value">-</div>
+              <div id="popup-omset-quick-badge" class="data-source-badge">belum ada data</div>
+            </div>
+            <div class="info-card monthly-sales-card">
+              <div class="info-card-label">Omset 30 Hari (Detail) 📊</div>
+              <div id="popup-omset-detail" class="info-card-value monthly-sold-value">-</div>
+              <div id="popup-omset-detail-badge" class="data-source-badge">belum ada data</div>
+            </div>
+          </div>
+          <div class="data-source-note">
+            <strong>ℹ️ Tingkat Keyakinan:</strong>
+            <ul>
+              <li><b style="color:#2e7d32">● Tinggi:</b> Terjual/Bulan dari API resmi Shopee</li>
+              <li><b style="color:#f57f17">● Sedang:</b> Terjual/Bulan dari Search API (cache)</li>
+              <li><b style="color:#c62828">● Rendah:</b> Estimasi dari rasio review × koreksi</li>
+            </ul>
+          </div>
+        </section>
 
-      <!-- Export -->
-      <section class="section export-section">
-        <h2 class="section-title">📤 Export Data</h2>
-        <div class="export-buttons">
-          <button id="btn-export-json" class="btn btn-export">
-            📄 JSON
-          </button>
-          <button id="btn-export-csv" class="btn btn-export">
-            📊 CSV
-          </button>
-          <button id="btn-export-tsv" class="btn btn-export" title="Salin data (TSV) ke clipboard — langsung Ctrl+V ke Google Sheets atau Excel, tanpa setup">
-            📋 Salin ke Sheets
-          </button>
-          <button id="btn-export-sheets" class="btn btn-export btn-sheets">
-            📗 Google Sheets
-          </button>
-        </div>
-        <p id="export-status" class="export-status d-none"></p>
-      </section>
+        <!-- Info Toko -->
+        <section class="section" id="shop-info-section">
+          <h2 class="section-title">🏪 Info Toko</h2>
+          <div id="shopInfoWrap">
+            <p class="empty-text" id="no-shop-data">Data toko belum tersedia. Klik "Scrape Data" untuk mengambil.</p>
+            <div id="shop-info-content" class="d-none">
+              <table class="data-table" id="shop-info-table">
+                <tbody id="shop-info-tbody">
+                </tbody>
+              </table>
+              <div class="data-source-note" id="shop-data-note">
+                <strong>ℹ️ Cara mendapatkan data ini:</strong>
+                <ul>
+                  <li><b>API Intercept:</b> Disadap dari response API toko (<code>/api/v4/shop/get_shop_detail</code>) yang dipanggil Shopee saat halaman dimuat.</li>
+                  <li><b>Direct Fetch:</b> Jika intercept gagal, extension langsung memanggil API toko menggunakan <code>shop_id</code> yang diambil dari URL produk.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
 
+        <!-- Daftar Review Terfilter -->
+        <section class="section" id="review-list-section">
+          <h2 class="section-title">
+            <span id="review-list-title">📋 Review Terfilter</span>
+            <span id="review-list-count" class="badge" style="font-size:9px; background:#ee4d2d; color:white; padding:2px 6px; border-radius:8px;">0</span>
+          </h2>
+          <p class="empty-text" id="no-review-list">Belum ada review yang sesuai filter (min. 10 kata).</p>
+          <div id="review-list-wrapper" class="d-none" style="max-height:220px; overflow-y:auto;">
+            <table class="data-table" id="review-list-table">
+              <thead>
+                <tr><th style="width:32px;">⭐</th><th style="width:90px;">User</th><th>Komentar</th></tr>
+              </thead>
+              <tbody id="review-list-tbody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Export -->
+        <section class="section export-section">
+          <h2 class="section-title">📤 Export Data</h2>
+          <div class="export-buttons">
+            <button id="btn-export-json" class="btn btn-export">
+              📄 JSON
+            </button>
+            <button id="btn-export-csv" class="btn btn-export">
+              📊 CSV
+            </button>
+            <button id="btn-export-tsv" class="btn btn-export" title="Salin data (TSV) ke clipboard — langsung Ctrl+V ke Google Sheets atau Excel, tanpa setup">
+              📋 Salin ke Sheets
+            </button>
+            <button id="btn-export-sheets" class="btn btn-export btn-sheets">
+              📗 Google Sheets
+            </button>
+          </div>
+          <p id="export-status" class="export-status d-none"></p>
+        </section>
+
+      </div><!-- /main-content -->
+    </div><!-- /view-active-product -->
+
+    <!-- View: Riwayat Produk (IndexedDB) -->
+    <div id="view-history" class="d-none" style="padding: 12px 14px;">
+      <div style="margin-bottom: 10px;">
+        <input type="text" id="popup-history-search" placeholder="🔍 Cari nama produk / toko..." style="width: 100%; padding: 7px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 11px; margin-bottom: 8px; box-sizing: border-box;">
+        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+          <button id="btn-popup-hist-tsv" class="btn btn-export" style="font-size: 11px; padding: 5px 10px; border-color:#1565c0; color:#1565c0;" title="Salin semua riwayat ke clipboard (TSV)">📋 Salin Semua</button>
+          <button id="btn-popup-hist-csv" class="btn btn-export" style="font-size: 11px; padding: 5px 10px;" title="Unduh CSV seluruh riwayat">📊 CSV</button>
+          <button id="btn-popup-hist-clear" class="btn" style="font-size: 11px; padding: 5px 10px; border-color: #ffa39e; color: #cf1322;" title="Hapus semua riwayat">🗑️ Hapus Semua</button>
+        </div>
+      </div>
+
+      <div id="popup-history-list" style="max-height: 440px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;"></div>
+      <div id="popup-history-empty" class="muted d-none" style="text-align: center; padding: 35px 10px; color: #888;">
+        📭 Belum ada riwayat produk tersimpan.<br>
+        <span style="font-size: 10px; color: #aaa;">Produk yang kamu buka/scrape di Shopee akan otomatis tersimpan di sini.</span>
+      </div>
     </div>
 
     <!-- Loading overlay -->
@@ -293,6 +322,7 @@
   </div>
 
   <!-- Import utility scripts -->
+  <script src="../utils/db.js"></script>
   <script src="../utils/parser.js"></script>
   <script src="../utils/exporter.js"></script>
   <script src="popup.js"></script>

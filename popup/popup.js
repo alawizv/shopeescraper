@@ -91,6 +91,7 @@
     checkUpdateBanner();
 
     setupEventListeners();
+    updatePopupHistoryCount();
 
     const tab = await getActiveTab();
 
@@ -336,6 +337,96 @@
 
       elements.btnExportSheets.disabled = false;
     });
+
+    // ── Tab Navigasi Popup (Produk Aktif vs Riwayat) ──
+    const tabActive = document.getElementById('popup-tab-active');
+    const tabHistory = document.getElementById('popup-tab-history');
+    const viewActive = document.getElementById('view-active-product');
+    const viewHistory = document.getElementById('view-history');
+
+    if (tabActive && tabHistory) {
+      tabActive.addEventListener('click', () => {
+        tabActive.classList.add('active');
+        tabHistory.classList.remove('active');
+        if (viewActive) viewActive.classList.remove('d-none');
+        if (viewHistory) viewHistory.classList.add('d-none');
+      });
+
+      tabHistory.addEventListener('click', () => {
+        tabHistory.classList.add('active');
+        tabActive.classList.remove('active');
+        if (viewHistory) viewHistory.classList.remove('d-none');
+        if (viewActive) viewActive.classList.add('d-none');
+        renderPopupHistory();
+      });
+    }
+
+    // ── Pencarian Riwayat di Popup ──
+    const searchHistory = document.getElementById('popup-history-search');
+    if (searchHistory) {
+      searchHistory.addEventListener('input', (e) => {
+        renderPopupHistory(e.target.value);
+      });
+    }
+
+    // ── Salin Semua Riwayat (TSV) di Popup ──
+    const btnPopHistTSV = document.getElementById('btn-popup-hist-tsv');
+    if (btnPopHistTSV) {
+      btnPopHistTSV.addEventListener('click', async () => {
+        if (typeof ShopeeDB === 'undefined') return;
+        const list = await ShopeeDB.getAll();
+        if (!list || list.length === 0) {
+          showExportStatus('Belum ada riwayat produk untuk disalin', 'error');
+          return;
+        }
+        const tsv = ShopeeDB.buildBulkTSV(list);
+        try {
+          await navigator.clipboard.writeText(tsv);
+          btnPopHistTSV.textContent = '✅ Tersalin!';
+          setTimeout(() => { btnPopHistTSV.textContent = '📋 Salin Semua'; }, 2500);
+        } catch(e) {
+          const blob = new Blob([tsv], { type: 'text/plain;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = `riwayat_shopee_${Date.now()}.tsv`;
+          document.body.appendChild(a); a.click(); a.remove();
+          URL.revokeObjectURL(url);
+        }
+      });
+    }
+
+    // ── Unduh CSV Semua Riwayat di Popup ──
+    const btnPopHistCSV = document.getElementById('btn-popup-hist-csv');
+    if (btnPopHistCSV) {
+      btnPopHistCSV.addEventListener('click', async () => {
+        if (typeof ShopeeDB === 'undefined') return;
+        const list = await ShopeeDB.getAll();
+        if (!list || list.length === 0) {
+          showExportStatus('Belum ada riwayat produk untuk diekspor', 'error');
+          return;
+        }
+        const csv = ShopeeDB.buildBulkCSV(list);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `riwayat_shopee_${Date.now()}.csv`;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+      });
+    }
+
+    // ── Hapus Semua Riwayat di Popup ──
+    const btnPopHistClear = document.getElementById('btn-popup-hist-clear');
+    if (btnPopHistClear) {
+      btnPopHistClear.addEventListener('click', async () => {
+        if (typeof ShopeeDB === 'undefined') return;
+        if (confirm('Yakin ingin menghapus SELURUH riwayat produk?')) {
+          await ShopeeDB.clear();
+          renderPopupHistory();
+          updatePopupHistoryCount();
+        }
+      });
+    }
   }
 
 
@@ -381,11 +472,156 @@
       hideLoading();
       showMainContent();
 
+      // Simpan otomatis ke database lokal (IndexedDB)
+      if (typeof ShopeeDB !== 'undefined' && currentData?.product?.name) {
+        ShopeeDB.saveProduct(currentData).then(() => {
+          updatePopupHistoryCount();
+        }).catch(err => console.warn('[Popup] Gagal simpan ke IndexedDB:', err));
+      }
+
     } catch (e) {
       console.error('[Popup] Error processing data:', e);
       hideLoading();
       setStatus('error', 'Error');
       showError('Terjadi error saat memproses data: ' + e.message);
+    }
+  }
+
+  // ========================================
+  // Riwayat Produk (IndexedDB)
+  // ========================================
+
+  /**
+   * Update badge hitungan riwayat di header tab popup
+   */
+  async function updatePopupHistoryCount() {
+    if (typeof ShopeeDB === 'undefined') return;
+    try {
+      const list = await ShopeeDB.getAll();
+      const badge = document.getElementById('popup-history-count');
+      if (badge) badge.textContent = list ? list.length : 0;
+    } catch (e) {}
+  }
+
+  /**
+   * Render daftar riwayat produk ke dalam popup
+   */
+  async function renderPopupHistory(filterKeyword = '') {
+    if (typeof ShopeeDB === 'undefined') return;
+    const listEl = document.getElementById('popup-history-list');
+    const emptyEl = document.getElementById('popup-history-empty');
+    if (!listEl || !emptyEl) return;
+
+    listEl.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">Memuat riwayat...</div>';
+
+    try {
+      let list = await ShopeeDB.getAll();
+      updatePopupHistoryCount();
+
+      if (filterKeyword && filterKeyword.trim()) {
+        const kw = filterKeyword.toLowerCase().trim();
+        list = list.filter(item =>
+          (item.name || '').toLowerCase().includes(kw) ||
+          (item.shop_name || '').toLowerCase().includes(kw)
+        );
+      }
+
+      if (!list || list.length === 0) {
+        listEl.innerHTML = '';
+        emptyEl.classList.remove('d-none');
+        return;
+      }
+
+      emptyEl.classList.add('d-none');
+      let html = '';
+
+      list.forEach(item => {
+        const pmin = item.price_min || 0;
+        const pmax = item.price_max || 0;
+        const priceText = (pmax && pmax !== pmin)
+          ? `${formatRupiah(pmin)} - ${formatRupiah(pmax)}`
+          : formatRupiah(pmin);
+
+        const timeStr = item.scraped_at ? new Date(item.scraped_at).toLocaleString('id-ID', {
+          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        }) : '-';
+
+        html += `
+          <div class="history-card">
+            <div class="history-card-title" title="${escapeHTML(item.name)}">${escapeHTML(item.name)}</div>
+            <div class="history-card-meta">
+              <span class="history-card-price">${priceText}</span>
+              <span>⭐ ${item.rating || 0} • ${formatNumber(item.total_sold)} terjual</span>
+            </div>
+            <div class="history-card-stats">
+              <div><b>Terjual/bln:</b> ${formatNumber(item.monthly_sold)}</div>
+              <div><b>Omset Quick:</b> ${item.omset_quick ? formatRupiah(item.omset_quick) : '-'}</div>
+            </div>
+            <div class="history-card-footer">
+              <span>🏪 ${escapeHTML(item.shop_name || '-')} • ${timeStr}</span>
+              <div class="history-card-actions">
+                <button class="btn-mini load" data-action="popup-view" data-id="${escapeHTML(item.id)}" title="Buka detail produk ini">👁️ Buka</button>
+                ${item.url ? `<a href="${escapeHTML(item.url)}" target="_blank" class="btn-mini" title="Buka di tab baru">🔗 Link</a>` : ''}
+                <button class="btn-mini delete" data-action="popup-delete" data-id="${escapeHTML(item.id)}" title="Hapus">✕</button>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+
+      listEl.innerHTML = html;
+
+      // Event listener tombol pada item riwayat di popup
+      listEl.querySelectorAll('[data-action="popup-view"]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const id = btn.getAttribute('data-id');
+          const record = await ShopeeDB.get(id);
+          if (record && record.output) {
+            currentData = record.output;
+            parsedProduct = record.output.product;
+
+            // Buka tab produk aktif
+            const tabActive = document.getElementById('popup-tab-active');
+            const tabHistory = document.getElementById('popup-tab-history');
+            const viewActive = document.getElementById('view-active-product');
+            const viewHistory = document.getElementById('view-history');
+
+            if (tabActive) tabActive.classList.add('active');
+            if (tabHistory) tabHistory.classList.remove('active');
+            if (viewActive) viewActive.classList.remove('d-none');
+            if (viewHistory) viewHistory.classList.add('d-none');
+
+            // Pastikan not-product-page disembunyikan dan main content ditampilkan
+            const notProd = document.getElementById('not-product-page');
+            if (notProd) notProd.classList.add('d-none');
+
+            renderProduct(currentData.product);
+            renderReviewSample(currentData.review_sample || null);
+            renderMonthlySales(currentData.product, { monthlySoldFromSearch: currentData.monthly_sold?.value });
+            renderShopInfo(currentData.shop || null);
+            renderVariants(currentData.variants || [], currentData.tierSummaries || []);
+            renderReviewList(currentData.filtered_reviews || currentData.negative_reviews || []);
+
+            hideLoading();
+            showMainContent();
+            setStatus('success', 'Riwayat 💾');
+          }
+        });
+      });
+
+      listEl.querySelectorAll('[data-action="popup-delete"]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const id = btn.getAttribute('data-id');
+          await ShopeeDB.delete(id);
+          renderPopupHistory(filterKeyword);
+        });
+      });
+
+    } catch (e) {
+      console.error('Gagal render riwayat popup:', e);
+      listEl.innerHTML = `<div style="text-align:center; color:#ff4d4f; padding:20px;">Gagal: ${e.message}</div>`;
     }
   }
 

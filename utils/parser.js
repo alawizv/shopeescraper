@@ -572,6 +572,20 @@ var ShopeeParser = (typeof ShopeeParser !== 'undefined' && ShopeeParser) ? Shope
   },
 
   /**
+   * Ekstrak shopid dan itemid dari URL produk Shopee
+   */
+  _extractIdFromUrl(url) {
+    if (!url) return { shopid: null, itemid: null };
+    try {
+      const m1 = url.match(/-i\.(\d+)\.(\d+)/);
+      if (m1) return { shopid: m1[1], itemid: m1[2] };
+      const m2 = url.match(/\/product\/(\d+)\/(\d+)/);
+      if (m2) return { shopid: m2[1], itemid: m2[2] };
+    } catch (e) {}
+    return { shopid: null, itemid: null };
+  },
+
+  /**
    * Bangun output JSON final yang siap diekspor
    * @param {object} product
    * @param {object} parseReviewResult
@@ -660,6 +674,8 @@ var ShopeeParser = (typeof ShopeeParser !== 'undefined' && ShopeeParser) ? Shope
       scraped_at: new Date().toISOString(),
       url: url || '',
       product: {
+        item_id: product?.item_id || this._extractIdFromUrl(url)?.itemid || null,
+        shop_id: product?.shop_id || shop?.shop_id || this._extractIdFromUrl(url)?.shopid || null,
         name: product?.name || '',
         price_min: product?.price_min || 0,
         price_max: product?.price_max || 0,

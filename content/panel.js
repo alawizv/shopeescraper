@@ -337,6 +337,177 @@ function createPanel() {
       .btn.tsv { border-color: #1565c0; color: #1565c0; font-size: 11px; }
       .btn.tsv:hover { background: #e3f2fd; border-color: #0d47a1; color: #0d47a1; }
 
+      /* Tab Navigasi */
+      .nav-tabs {
+        display: flex;
+        background: #f8f8f8;
+        border-bottom: 1px solid #eee;
+        flex-shrink: 0;
+      }
+      .nav-tab {
+        flex: 1;
+        padding: 8px 10px;
+        font-size: 11.5px;
+        font-weight: 700;
+        border: none;
+        background: transparent;
+        color: #777;
+        cursor: pointer;
+        transition: all .15s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        border-bottom: 2px solid transparent;
+      }
+      .nav-tab:hover { color: #ee4d2d; background: #fff; }
+      .nav-tab.active {
+        color: #ee4d2d;
+        background: #fff;
+        border-bottom-color: #ee4d2d;
+      }
+      .tab-badge {
+        font-size: 9px;
+        background: #eee;
+        color: #555;
+        padding: 1px 6px;
+        border-radius: 999px;
+        font-weight: 800;
+      }
+      .nav-tab.active .tab-badge {
+        background: #ee4d2d;
+        color: #fff;
+      }
+
+      /* History List & Cards */
+      .history-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 10px;
+      }
+      .search-input {
+        width: 100%;
+        padding: 6px 10px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 11px;
+        box-sizing: border-box;
+      }
+      .search-input:focus {
+        outline: none;
+        border-color: #ee4d2d;
+      }
+      .history-btns {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .btn.danger {
+        border-color: #ffa39e;
+        color: #cf1322;
+      }
+      .btn.danger:hover {
+        background: #fff1f0;
+        border-color: #ff4d4f;
+      }
+      .history-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-height: 480px;
+        overflow-y: auto;
+      }
+      .history-card {
+        border: 1px solid #eee;
+        border-radius: 8px;
+        padding: 8px 10px;
+        background: #fafafa;
+        transition: all .15s;
+      }
+      .history-card:hover {
+        border-color: #ffbb96;
+        background: #fff8f0;
+      }
+      .history-card-title {
+        font-size: 11.5px;
+        font-weight: 700;
+        color: #222;
+        line-height: 1.35;
+        margin-bottom: 4px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .history-card-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 10px;
+        color: #666;
+        margin-bottom: 6px;
+      }
+      .history-card-price {
+        font-weight: 800;
+        color: #ee4d2d;
+        font-size: 11px;
+      }
+      .history-card-stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 4px;
+        font-size: 9.5px;
+        color: #666;
+        background: #fff;
+        padding: 5px 6px;
+        border-radius: 5px;
+        border: 1px solid #f0f0f0;
+        margin-bottom: 6px;
+      }
+      .history-card-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 9px;
+        color: #999;
+      }
+      .history-card-actions {
+        display: flex;
+        gap: 4px;
+      }
+      .btn-mini {
+        padding: 3px 6px;
+        font-size: 9.5px;
+        font-weight: 700;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+        background: #fff;
+        cursor: pointer;
+        color: #333;
+        text-decoration: none;
+      }
+      .btn-mini:hover {
+        border-color: #ee4d2d;
+        color: #ee4d2d;
+      }
+      .btn-mini.load {
+        background: #fff0eb;
+        border-color: #ffbb96;
+        color: #d4380d;
+      }
+      .btn-mini.load:hover {
+        background: #ee4d2d;
+        color: #fff;
+        border-color: #ee4d2d;
+      }
+      .btn-mini.delete:hover {
+        border-color: #ff4d4f;
+        color: #ff4d4f;
+        background: #fff1f0;
+      }
+
+
       .section-title {
         display: flex;
         align-items: center;
@@ -398,7 +569,13 @@ function createPanel() {
         </div>
       </div>
 
-      <div class="body">
+      <!-- Tab Navigasi -->
+      <div class="nav-tabs">
+        <button class="nav-tab active" id="tabBtnActive">📦 Produk Aktif</button>
+        <button class="nav-tab" id="tabBtnHistory">📜 Riwayat <span class="tab-badge" id="panelHistoryCount">0</span></button>
+      </div>
+
+      <div class="body" id="bodyActive">
         <!-- Aksi -->
         <div class="actions">
           <button class="btn primary" id="btnScrape">🔄 Scrape</button>
@@ -526,6 +703,24 @@ function createPanel() {
             </thead>
             <tbody id="negTbody"></tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- Body Riwayat Produk (IndexedDB) -->
+      <div class="body" id="bodyHistory" style="display:none;">
+        <div class="history-actions">
+          <input type="text" id="historySearchInput" placeholder="🔍 Cari nama produk / toko..." class="search-input">
+          <div class="history-btns">
+            <button class="btn tsv" id="btnHistoryTSV" title="Salin semua riwayat ke clipboard (TSV) — langsung Ctrl+V ke Sheets">📋 Salin Semua</button>
+            <button class="btn" id="btnHistoryCSV" title="Download file CSV seluruh riwayat">📊 CSV</button>
+            <button class="btn danger" id="btnHistoryClear" title="Hapus semua riwayat produk">🗑️ Hapus Semua</button>
+          </div>
+        </div>
+
+        <div id="historyListWrap" class="history-list"></div>
+        <div id="historyEmpty" class="muted" style="text-align:center; padding:30px 10px; display:none;">
+          📭 Belum ada riwayat produk.<br>
+          <span style="font-size:10px; color:#bbb;">Produk yang kamu buka/scrape akan otomatis tersimpan di sini.</span>
         </div>
       </div>
     </div>
@@ -812,6 +1007,126 @@ function render(shadow, output) {
       });
       negTbody.innerHTML = html;
     }
+  }
+
+  // Simpan otomatis ke IndexedDB (History) jika data produk valid
+  if (typeof ShopeeDB !== 'undefined' && output.product?.name && output.product.name !== '—') {
+    ShopeeDB.saveProduct(output).then(() => {
+      updatePanelHistoryCount(shadow);
+    }).catch(err => console.warn('[Shopee Scraper] Gagal auto-save history:', err));
+  }
+}
+
+// ── Manajemen Riwayat Produk (IndexedDB) ──
+async function updatePanelHistoryCount(shadow) {
+  if (typeof ShopeeDB === 'undefined') return;
+  try {
+    const list = await ShopeeDB.getAll();
+    const badge = shadow.getElementById('panelHistoryCount');
+    if (badge) badge.textContent = list ? list.length : 0;
+  } catch(e) {}
+}
+
+async function renderHistoryList(shadow, filterKeyword = '') {
+  if (typeof ShopeeDB === 'undefined') return;
+  const wrap = shadow.getElementById('historyListWrap');
+  const empty = shadow.getElementById('historyEmpty');
+  if (!wrap || !empty) return;
+
+  wrap.innerHTML = '<div class="muted" style="text-align:center; padding:15px 0;">Memuat riwayat...</div>';
+
+  try {
+    let list = await ShopeeDB.getAll();
+    updatePanelHistoryCount(shadow);
+
+    if (filterKeyword && filterKeyword.trim()) {
+      const kw = filterKeyword.toLowerCase().trim();
+      list = list.filter(item =>
+        (item.name || '').toLowerCase().includes(kw) ||
+        (item.shop_name || '').toLowerCase().includes(kw)
+      );
+    }
+
+    if (!list || list.length === 0) {
+      wrap.innerHTML = '';
+      empty.style.display = 'block';
+      return;
+    }
+
+    empty.style.display = 'none';
+    let html = '';
+
+    list.forEach(item => {
+      const pmin = item.price_min || 0;
+      const pmax = item.price_max || 0;
+      const priceText = (pmax && pmax !== pmin)
+        ? `${formatRupiah(pmin)}–${formatRupiah(pmax)}`
+        : formatRupiah(pmin);
+
+      const timeStr = item.scraped_at ? new Date(item.scraped_at).toLocaleString('id-ID', {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+      }) : '-';
+
+      html += `
+        <div class="history-card">
+          <div class="history-card-title" title="${escapeHTML(item.name)}">${escapeHTML(item.name)}</div>
+          <div class="history-card-meta">
+            <span class="history-card-price">${priceText}</span>
+            <span>⭐ ${item.rating || 0} | ${Number(item.total_sold || 0).toLocaleString('id-ID')} terjual</span>
+          </div>
+          <div class="history-card-stats">
+            <div><b>Terjual/bln:</b> ${Number(item.monthly_sold || 0).toLocaleString('id-ID')}</div>
+            <div><b>Omset Quick:</b> ${item.omset_quick ? formatRupiah(item.omset_quick) : '-'}</div>
+          </div>
+          <div class="history-card-footer">
+            <span>🏪 ${escapeHTML(item.shop_name || '-')} • ${timeStr}</span>
+            <div class="history-card-actions">
+              <button class="btn-mini load" data-action="view" data-id="${escapeHTML(item.id)}" title="Buka detail produk ini di panel">👁️ Buka</button>
+              ${item.url ? `<a href="${escapeHTML(item.url)}" target="_blank" class="btn-mini" title="Buka produk ini di tab baru">🔗 Link</a>` : ''}
+              <button class="btn-mini delete" data-action="delete" data-id="${escapeHTML(item.id)}" title="Hapus dari riwayat">✕</button>
+            </div>
+          </div>
+        </div>
+      `;
+    });
+
+    wrap.innerHTML = html;
+
+    // Listener tombol pada setiap kartu riwayat
+    wrap.querySelectorAll('[data-action="view"]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id = btn.getAttribute('data-id');
+        const record = await ShopeeDB.get(id);
+        if (record && record.output) {
+          const tabActive = shadow.getElementById('tabBtnActive');
+          const tabHistory = shadow.getElementById('tabBtnHistory');
+          const bodyActive = shadow.getElementById('bodyActive');
+          const bodyHistory = shadow.getElementById('bodyHistory');
+
+          if (tabActive) tabActive.classList.add('active');
+          if (tabHistory) tabHistory.classList.remove('active');
+          if (bodyActive) bodyActive.style.display = 'block';
+          if (bodyHistory) bodyHistory.style.display = 'none';
+
+          render(shadow, record.output);
+          setBadge(shadow, 'Riwayat 💾', 'api');
+        }
+      });
+    });
+
+    wrap.querySelectorAll('[data-action="delete"]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id = btn.getAttribute('data-id');
+        await ShopeeDB.delete(id);
+        renderHistoryList(shadow, filterKeyword);
+      });
+    });
+
+  } catch(e) {
+    console.error('Gagal render riwayat:', e);
+    wrap.innerHTML = `<div class="muted" style="color:#ff4d4f; text-align:center;">Gagal memuat: ${e.message}</div>`;
   }
 }
 
@@ -1107,6 +1422,98 @@ async function mountPanel() {
       }, 2500);
     }
   });
+
+  // ── Tab Navigasi (Produk Aktif vs Riwayat) ──
+  const tabBtnActive = shadow.getElementById('tabBtnActive');
+  const tabBtnHistory = shadow.getElementById('tabBtnHistory');
+  const bodyActive = shadow.getElementById('bodyActive');
+  const bodyHistory = shadow.getElementById('bodyHistory');
+
+  if (tabBtnActive && tabBtnHistory) {
+    tabBtnActive.addEventListener('click', () => {
+      tabBtnActive.classList.add('active');
+      tabBtnHistory.classList.remove('active');
+      if (bodyActive) bodyActive.style.display = 'block';
+      if (bodyHistory) bodyHistory.style.display = 'none';
+    });
+
+    tabBtnHistory.addEventListener('click', () => {
+      tabBtnHistory.classList.add('active');
+      tabBtnActive.classList.remove('active');
+      if (bodyHistory) bodyHistory.style.display = 'block';
+      if (bodyActive) bodyActive.style.display = 'none';
+      renderHistoryList(shadow);
+    });
+  }
+
+  // ── Pencarian Riwayat Produk ──
+  const historySearchInput = shadow.getElementById('historySearchInput');
+  if (historySearchInput) {
+    historySearchInput.addEventListener('input', (e) => {
+      renderHistoryList(shadow, e.target.value);
+    });
+  }
+
+  // ── Salin Semua Riwayat (TSV) ──
+  const btnHistTSV = shadow.getElementById('btnHistoryTSV');
+  if (btnHistTSV) {
+    btnHistTSV.addEventListener('click', async () => {
+      if (typeof ShopeeDB === 'undefined') return;
+      const list = await ShopeeDB.getAll();
+      if (!list || list.length === 0) {
+        alert('Belum ada riwayat produk.');
+        return;
+      }
+      const tsv = ShopeeDB.buildBulkTSV(list);
+      try {
+        await navigator.clipboard.writeText(tsv);
+        btnHistTSV.textContent = '✅ Tersalin!';
+        btnHistTSV.style.borderColor = '#2e7d32';
+        btnHistTSV.style.color = '#2e7d32';
+      } catch (e) {
+        const blob = new Blob([tsv], { type: 'text/plain;charset=utf-8;' });
+        downloadBlob(blob, `riwayat_shopee_${Date.now()}.tsv`);
+        btnHistTSV.textContent = '⬇️ Diunduh (.tsv)';
+      }
+      setTimeout(() => {
+        btnHistTSV.textContent = '📋 Salin Semua';
+        btnHistTSV.style.borderColor = '';
+        btnHistTSV.style.color = '';
+      }, 2500);
+    });
+  }
+
+  // ── Download CSV Semua Riwayat ──
+  const btnHistCSV = shadow.getElementById('btnHistoryCSV');
+  if (btnHistCSV) {
+    btnHistCSV.addEventListener('click', async () => {
+      if (typeof ShopeeDB === 'undefined') return;
+      const list = await ShopeeDB.getAll();
+      if (!list || list.length === 0) {
+        alert('Belum ada riwayat produk.');
+        return;
+      }
+      const csv = ShopeeDB.buildBulkCSV(list);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      downloadBlob(blob, `riwayat_shopee_${Date.now()}.csv`);
+    });
+  }
+
+  // ── Hapus Semua Riwayat ──
+  const btnHistClear = shadow.getElementById('btnHistoryClear');
+  if (btnHistClear) {
+    btnHistClear.addEventListener('click', async () => {
+      if (typeof ShopeeDB === 'undefined') return;
+      if (confirm('Yakin ingin menghapus SELURUH riwayat produk?')) {
+        await ShopeeDB.clear();
+        renderHistoryList(shadow);
+        updatePanelHistoryCount(shadow);
+      }
+    });
+  }
+
+  // Inisialisasi hitungan riwayat
+  updatePanelHistoryCount(shadow);
 
   // Shadow aktif dipakai listener storage global di bawah
   activeShadow = shadow;

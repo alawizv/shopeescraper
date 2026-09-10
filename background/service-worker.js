@@ -5,13 +5,65 @@
  * Menangani:
  * - Komunikasi antara content script dan popup
  * - Google Sheets OAuth
- * - Penyimpanan data
+ * - Penyimpanan data lokal (IndexedDB)
  */
+
+try {
+  importScripts('../utils/db.js');
+} catch (e) {
+  console.error('[Service Worker] Gagal import db.js:', e);
+}
 
 // ========================================
 // Listener untuk pesan dari content script dan popup
 // ========================================
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+
+  // ── Operasi Database Riwayat Produk (IndexedDB) ──
+  if (message.action === 'DB_SAVE_PRODUCT') {
+    if (typeof ShopeeDB !== 'undefined' && ShopeeDB._direct) {
+      ShopeeDB._direct.save(message.record)
+        .then(result => sendResponse({ ok: true, data: result }))
+        .catch(err => sendResponse({ error: err.message }));
+      return true;
+    }
+  }
+
+  if (message.action === 'DB_GET_ALL') {
+    if (typeof ShopeeDB !== 'undefined' && ShopeeDB._direct) {
+      ShopeeDB._direct.getAll()
+        .then(list => sendResponse({ ok: true, data: list }))
+        .catch(err => sendResponse({ error: err.message }));
+      return true;
+    }
+  }
+
+  if (message.action === 'DB_GET_ONE') {
+    if (typeof ShopeeDB !== 'undefined' && ShopeeDB._direct) {
+      ShopeeDB._direct.get(message.id)
+        .then(item => sendResponse({ ok: true, data: item }))
+        .catch(err => sendResponse({ error: err.message }));
+      return true;
+    }
+  }
+
+  if (message.action === 'DB_DELETE') {
+    if (typeof ShopeeDB !== 'undefined' && ShopeeDB._direct) {
+      ShopeeDB._direct.delete(message.id)
+        .then(() => sendResponse({ ok: true }))
+        .catch(err => sendResponse({ error: err.message }));
+      return true;
+    }
+  }
+
+  if (message.action === 'DB_CLEAR') {
+    if (typeof ShopeeDB !== 'undefined' && ShopeeDB._direct) {
+      ShopeeDB._direct.clear()
+        .then(() => sendResponse({ ok: true }))
+        .catch(err => sendResponse({ error: err.message }));
+      return true;
+    }
+  }
 
   // ── Forward pesan dari panel ke injector dalam tab yang sama ──
   if (message.action === 'PANEL_FORWARD_TO_TAB') {

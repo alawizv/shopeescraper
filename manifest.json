@@ -27,7 +27,7 @@
     },
     {
       "matches": ["https://*.shopee.co.id/*"],
-      "js": ["utils/parser.js", "content/panel.js"],
+      "js": ["utils/db.js", "utils/parser.js", "content/panel.js"],
       "run_at": "document_end"
     }
   ],
