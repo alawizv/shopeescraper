@@ -588,6 +588,11 @@
           month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
         }) : '-';
 
+        const isEst = item.monthly_sold_source === 'ESTIMATED' || String(item.sold_per_month_source || '').toLowerCase().includes('ulasan');
+        const soldDisplay = item.monthly_sold > 0
+          ? `${formatNumber(item.monthly_sold)}${isEst ? ' (est)' : ''}`
+          : '-';
+
         html += `
           <div class="history-card">
             <div class="history-card-title" title="${escapeHTML(item.name)}">${escapeHTML(item.name)}</div>
@@ -596,7 +601,7 @@
               <span>⭐ ${item.rating || 0} • ${formatNumber(item.total_sold)} terjual</span>
             </div>
             <div class="history-card-stats">
-              <div><b>Terjual/bln:</b> ${formatNumber(item.monthly_sold)}</div>
+              <div><b>Terjual/bln:</b> ${soldDisplay}</div>
               <div><b>Omset Quick:</b> ${item.omset_quick ? formatRupiah(item.omset_quick) : '-'}</div>
             </div>
             <div class="history-card-footer">
@@ -776,14 +781,20 @@
       monthlySold = rawData.monthlySoldFromSearch;
       sourceText = '✅ Search API (● Sedang)';
     }
-    // Prioritas 3: Tidak ada data
+    // Prioritas 3: Estimasi ulasan 30 hari dari engine omset
+    else if (currentData?.omset?.sold_per_month > 0) {
+      monthlySold = currentData.omset.sold_per_month;
+      sourceText = '🟣 Estimasi dari Ulasan 30 Hari';
+    }
+    // Prioritas 4: Tidak ada data
     else {
-      sourceText = '⚠️ Belum tersedia — refresh atau browse produk lain dulu';
+      sourceText = '⚠️ Belum tersedia di PDP';
     }
 
+    const isEst = sourceText.includes('Estimasi');
     if (elements.monthlySoldValue) {
       elements.monthlySoldValue.textContent = monthlySold > 0
-        ? formatNumber(monthlySold) + ' / bulan'
+        ? formatNumber(monthlySold) + (isEst ? ' / bln (est)' : ' / bulan')
         : '-';
     }
     if (elements.monthlySoldSource) {
@@ -1107,15 +1118,16 @@
   // ========================================
   function getCurrencySymbol(url) {
     const h = (url || '').toLowerCase();
+    if (h.includes('.co.id') || h.includes('shopee.id')) return 'Rp';
+    if (h.includes('.co.th')) return '฿';
     if (h.includes('.sg')) return 'S$';
     if (h.includes('.com.my') || h.includes('.my')) return 'RM';
     if (h.includes('.ph')) return '₱';
-    if (h.includes('.co.th') || h.includes('.th')) return '฿';
     if (h.includes('.vn')) return '₫';
     if (h.includes('.tw')) return 'NT$';
     if (h.includes('.com.br') || h.includes('.br')) return 'R$';
     if (h.includes('.com.mx') || h.includes('.mx')) return 'MX$';
-    if (h.includes('.com.co') || h.includes('.co')) return 'COL$';
+    if (h.includes('.com.co')) return 'COL$';
     if (h.includes('.cl')) return 'CL$';
     return 'Rp';
   }
@@ -1145,14 +1157,60 @@
 
   /**
    * Buat string TSV siap tempel ke Google Sheets / Excel
+   * Dilengkapi Tabel Master 1 Baris di atas agar langsung bisa dicopy ke spreadsheet tracking riset!
    */
   function buildTSV(data) {
     const T = '\t';
     const N = '\n';
-    const esc = (v) => String(v ?? '').replace(/\t/g, ' ').replace(/\n/g, ' ');
+    const esc = (v) => String(v ?? '').replace(/[\t\r\n]+/g, ' ').trim();
 
     let tsv = '';
-    tsv += '=== INFO PRODUK ===' + N;
+
+    const monthlySold = data.monthly_sold?.value || data.omset?.sold_per_month || 0;
+    const isEstimated = !data.monthly_sold?.value && data.omset?.sold_per_month > 0;
+    const soldDisplay = monthlySold > 0 ? (isEstimated ? `${monthlySold} (est)` : monthlySold) : '-';
+    const omsetValue = data.omset?.quick_value || data.omset?.detail_value || 0;
+    const shopStatus = data.shop?.is_mall ? 'Shopee Mall' : data.shop?.is_preferred ? 'Star+' : 'Regular';
+    const topPain = data.review_insights?.pain_points?.[0]?.label || '-';
+
+    // ── 1. RINGKASAN MASTER SHEET (1 Baris Siap Masuk ke Spreadsheet Riset) ──
+    tsv += '=== 📊 MASTER TRACKING SHEET (1 BARIS PRODUK) ===' + N;
+    tsv += [
+      'Tanggal Scraping',
+      'Nama Produk',
+      'Toko',
+      'Lokasi',
+      'Status Toko',
+      'Harga Min',
+      'Harga Max',
+      'Terjual / Bln',
+      'Est. Omset / Bln',
+      'Rating',
+      'Total Review',
+      'Total Terjual',
+      'Top Keluhan',
+      'URL Produk'
+    ].join(T) + N;
+
+    tsv += [
+      esc(data.scraped_at ? data.scraped_at.split('T')[0] : new Date().toISOString().split('T')[0]),
+      esc(data.product?.name),
+      esc(data.shop?.name || '-'),
+      esc(data.shop?.location || '-'),
+      shopStatus,
+      data.product?.price_min || 0,
+      data.product?.price_max || 0,
+      soldDisplay,
+      omsetValue,
+      data.product?.rating || 0,
+      data.product?.review_count || 0,
+      data.product?.total_sold || 0,
+      esc(topPain),
+      esc(data.url)
+    ].join(T) + N + N;
+
+    // ── 2. INFO DETAIL PRODUK & ESTIMASI OMSET (Key-Value) ─────────
+    tsv += '=== ℹ️ DETAIL PRODUK & ESTIMASI OMSET ===' + N;
     tsv += 'Field' + T + 'Value' + N;
     tsv += 'Nama Produk'        + T + esc(data.product?.name)              + N;
     tsv += 'Harga Min'          + T + (data.product?.price_min || 0)       + N;
@@ -1160,28 +1218,27 @@
     tsv += 'Rating'             + T + (data.product?.rating || 0)          + N;
     tsv += 'Total Terjual'      + T + (data.product?.total_sold || 0)      + N;
     tsv += 'Jumlah Ulasan'      + T + (data.product?.review_count || 0)    + N;
-    tsv += 'Terjual / Bulan'    + T + (data.monthly_sold?.value || 0)      + N;
-    tsv += 'Sumber Sold/Bulan'  + T + esc(data.monthly_sold?.source)       + N;
+    tsv += 'Terjual / Bulan'    + T + soldDisplay                          + N;
+    tsv += 'Sumber Sold/Bulan'  + T + esc(data.monthly_sold?.source || data.omset?.sold_per_month_source || '-') + N;
     tsv += 'Omset Quick'        + T + (data.omset?.quick_value || 0)       + N;
     tsv += 'Omset Detail'       + T + (data.omset?.detail_value || 0)      + N;
     tsv += 'Faktor Koreksi'     + T + (data.omset?.correction_factor || 0) + N;
-    tsv += 'Sumber Quick'       + T + esc(data.omset?.sold_per_month_source) + N;
     tsv += 'URL'                + T + esc(data.url)                        + N;
     tsv += 'Waktu Scraping'     + T + esc(data.scraped_at)                 + N;
 
     if (data.shop) {
-      tsv += N + '=== INFO TOKO ===' + N;
+      tsv += N + '=== 🏪 INFO TOKO ===' + N;
       tsv += 'Field' + T + 'Value' + N;
       tsv += 'Nama Toko'       + T + esc(data.shop.name)              + N;
       tsv += 'Lokasi'          + T + esc(data.shop.location)           + N;
       tsv += 'Pengikut'        + T + (data.shop.follower_count || 0)  + N;
       tsv += 'Jumlah Produk'   + T + (data.shop.product_count || 0)  + N;
       tsv += 'Rating Toko'     + T + (data.shop.rating_star || 0)    + N;
-      tsv += 'Status'          + T + (data.shop.is_mall ? 'Mall' : data.shop.is_preferred ? 'Star+' : 'Regular') + N;
+      tsv += 'Status'          + T + shopStatus                       + N;
     }
 
     if (data.variants?.length) {
-      tsv += N + '=== VARIAN ===' + N;
+      tsv += N + '=== 📦 VARIAN PRODUK ===' + N;
       tsv += 'Tier 1' + T + 'Tier 2' + T + '% Terjual' + T + 'Harga' + N;
       const sorted = [...data.variants].sort((a, b) => (b.sales_percentage || 0) - (a.sales_percentage || 0));
       sorted.forEach(v => {
@@ -1189,19 +1246,9 @@
       });
     }
 
-    const reviews = data.filtered_reviews || data.negative_reviews || [];
-    if (reviews.length) {
-      const filterLabel = data.star_filter_label ? ` (${data.star_filter_label})` : '';
-      tsv += N + `=== REVIEW${filterLabel} ===` + N;
-      tsv += 'Bintang' + T + 'Tanggal' + T + 'User' + T + 'Varian' + T + 'Komentar' + N;
-      reviews.forEach(r => {
-        tsv += (r.stars || '') + T + esc(r.date) + T + esc(r.user) + T + esc(r.variant || '-') + T + esc(r.comment) + N;
-      });
-    }
-
     if (data.review_insights && (data.review_insights.pain_points?.length || data.review_insights.top_complaint_words?.length)) {
       const ri = data.review_insights;
-      tsv += N + '=== INSIGHT KELUHAN PEMBELI ===' + N;
+      tsv += N + '=== ⚠️ INSIGHT KELUHAN PEMBELI (PAIN POINTS) ===' + N;
       tsv += 'Kategori Keluhan' + T + 'Jumlah' + T + 'Persentase' + N;
       (ri.pain_points || []).forEach(p => {
         tsv += esc(p.label) + T + p.count + T + p.percentage + '%' + N;
@@ -1209,6 +1256,16 @@
       if (ri.top_complaint_words?.length) {
         tsv += N + 'Top Kata Kunci Keluhan' + T + ri.top_complaint_words.map(w => `${w.word} (${w.count}x)`).join(', ') + N;
       }
+    }
+
+    const reviews = data.filtered_reviews || data.negative_reviews || [];
+    if (reviews.length) {
+      const filterLabel = data.star_filter_label ? ` (${data.star_filter_label})` : '';
+      tsv += N + `=== 💬 DAFTAR ULASAN PEMBELI${filterLabel} ===` + N;
+      tsv += 'Bintang' + T + 'Tanggal' + T + 'User' + T + 'Varian' + T + 'Komentar' + N;
+      reviews.forEach(r => {
+        tsv += (r.stars || '') + T + esc(r.date) + T + esc(r.user) + T + esc(r.variant || '-') + T + esc(r.comment) + N;
+      });
     }
 
     return tsv;

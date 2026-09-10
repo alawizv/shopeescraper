@@ -177,6 +177,11 @@ var ShopeeDB = (typeof ShopeeDB !== 'undefined' && ShopeeDB) ? ShopeeDB : (funct
                      output.url?.match(/\/product\/(\d+)\/(\d+)/)?.[1] ||
                      null;
 
+      const effectiveMonthlySold = output.monthly_sold?.value || output.omset?.sold_per_month || 0;
+      const effectiveMonthlySoldSource = (output.monthly_sold?.source && output.monthly_sold.source !== 'NONE')
+        ? output.monthly_sold.source
+        : (output.omset?.sold_per_month_source || '-');
+
       const record = {
         id: String(itemId),
         itemid: String(itemId),
@@ -186,8 +191,8 @@ var ShopeeDB = (typeof ShopeeDB !== 'undefined' && ShopeeDB) ? ShopeeDB : (funct
         price_max: output.product.price_max || 0,
         rating: output.product.rating || 0,
         total_sold: output.product.total_sold || 0,
-        monthly_sold: output.monthly_sold?.value || 0,
-        monthly_sold_source: output.monthly_sold?.source || '-',
+        monthly_sold: effectiveMonthlySold,
+        monthly_sold_source: effectiveMonthlySoldSource,
         omset_quick: output.omset?.quick_value || 0,
         omset_detail: output.omset?.detail_value || 0,
         sold_per_month_source: output.omset?.sold_per_month_source || '-',
@@ -285,7 +290,7 @@ var ShopeeDB = (typeof ShopeeDB !== 'undefined' && ShopeeDB) ? ShopeeDB : (funct
     buildBulkTSV(records) {
       const T = '\t';
       const N = '\n';
-      const esc = (v) => String(v ?? '').replace(/\t/g, ' ').replace(/\n/g, ' ');
+      const esc = (v) => String(v ?? '').replace(/[\t\r\n]+/g, ' ').trim();
 
       let tsv = '';
       tsv += 'No' + T +
@@ -305,13 +310,15 @@ var ShopeeDB = (typeof ShopeeDB !== 'undefined' && ShopeeDB) ? ShopeeDB : (funct
 
       (records || []).forEach((r, idx) => {
         const topPain = r.output?.review_insights?.pain_points?.[0]?.label || '-';
+        const isEst = r.monthly_sold_source === 'ESTIMATED' || String(r.sold_per_month_source || '').toLowerCase().includes('ulasan');
+        const soldDisplay = r.monthly_sold > 0 ? (isEst ? `${r.monthly_sold} (est)` : r.monthly_sold) : '-';
         tsv += (idx + 1) + T +
                esc(r.name) + T +
                (r.price_min || 0) + T +
                (r.price_max || 0) + T +
                (r.rating || 0) + T +
                (r.total_sold || 0) + T +
-               (r.monthly_sold || 0) + T +
+               soldDisplay + T +
                (r.omset_quick || 0) + T +
                (r.omset_detail || 0) + T +
                esc(topPain) + T +
@@ -325,13 +332,15 @@ var ShopeeDB = (typeof ShopeeDB !== 'undefined' && ShopeeDB) ? ShopeeDB : (funct
     },
 
     buildBulkCSV(records) {
-      const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const esc = (v) => `"${String(v ?? '').replace(/"/g, '""').replace(/[\r\n]+/g, ' ').trim()}"`;
 
       let csv = 'No,Nama Produk,Harga Min,Harga Max,Rating,Total Terjual,Terjual / Bulan,Omset Quick,Omset Detail,Top Keluhan,Toko,Lokasi,URL Produk,Waktu Scraping\n';
 
       (records || []).forEach((r, idx) => {
         const topPain = r.output?.review_insights?.pain_points?.[0]?.label || '-';
-        csv += `${idx + 1},${esc(r.name)},${r.price_min || 0},${r.price_max || 0},${r.rating || 0},${r.total_sold || 0},${r.monthly_sold || 0},${r.omset_quick || 0},${r.omset_detail || 0},${esc(topPain)},${esc(r.shop_name)},${esc(r.shop_location)},${esc(r.url)},${esc(r.scraped_at)}\n`;
+        const isEst = r.monthly_sold_source === 'ESTIMATED' || String(r.sold_per_month_source || '').toLowerCase().includes('ulasan');
+        const soldDisplay = r.monthly_sold > 0 ? (isEst ? `${r.monthly_sold} (est)` : r.monthly_sold) : '-';
+        csv += `${idx + 1},${esc(r.name)},${r.price_min || 0},${r.price_max || 0},${r.rating || 0},${r.total_sold || 0},${esc(soldDisplay)},${r.omset_quick || 0},${r.omset_detail || 0},${esc(topPain)},${esc(r.shop_name)},${esc(r.shop_location)},${esc(r.url)},${esc(r.scraped_at)}\n`;
       });
 
       return '\uFEFF' + csv;

@@ -576,15 +576,16 @@ var ShopeeParser = (typeof ShopeeParser !== 'undefined' && ShopeeParser) ? Shope
    */
   getCurrencySymbol(url) {
     const h = (url || '').toLowerCase();
+    if (h.includes('.co.id') || h.includes('shopee.id')) return 'Rp';
+    if (h.includes('.co.th')) return '฿';
     if (h.includes('.sg')) return 'S$';
     if (h.includes('.com.my') || h.includes('.my')) return 'RM';
     if (h.includes('.ph')) return '₱';
-    if (h.includes('.co.th') || h.includes('.th')) return '฿';
     if (h.includes('.vn')) return '₫';
     if (h.includes('.tw')) return 'NT$';
     if (h.includes('.com.br') || h.includes('.br')) return 'R$';
     if (h.includes('.com.mx') || h.includes('.mx')) return 'MX$';
-    if (h.includes('.com.co') || h.includes('.co')) return 'COL$';
+    if (h.includes('.com.co')) return 'COL$';
     if (h.includes('.cl')) return 'CL$';
     return 'Rp';
   },

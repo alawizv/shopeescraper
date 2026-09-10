@@ -41,15 +41,16 @@ function isSupportedShopeePage(url) {
 
 function getCurrencySymbol(urlOrHost) {
   const h = (urlOrHost || location.href || '').toLowerCase();
+  if (h.includes('.co.id') || h.includes('shopee.id')) return 'Rp';
+  if (h.includes('.co.th')) return '฿';
   if (h.includes('.sg')) return 'S$';
   if (h.includes('.com.my') || h.includes('.my')) return 'RM';
   if (h.includes('.ph')) return '₱';
-  if (h.includes('.co.th') || h.includes('.th')) return '฿';
   if (h.includes('.vn')) return '₫';
   if (h.includes('.tw')) return 'NT$';
   if (h.includes('.com.br') || h.includes('.br')) return 'R$';
   if (h.includes('.com.mx') || h.includes('.mx')) return 'MX$';
-  if (h.includes('.com.co') || h.includes('.co')) return 'COL$';
+  if (h.includes('.com.co')) return 'COL$';
   if (h.includes('.cl')) return 'CL$';
   return 'Rp';
 }
@@ -68,39 +69,46 @@ function escapeHTML(str) {
 }
 
 function buildCSV(output) {
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""').replace(/[\r\n]+/g, ' ').trim()}"`;
   let csv = '';
+
+  const monthlySold = output.monthly_sold?.value || output.omset?.sold_per_month || 0;
+  const isEstimated = !output.monthly_sold?.value && output.omset?.sold_per_month > 0;
+  const soldDisplay = monthlySold > 0 ? (isEstimated ? `${monthlySold} (est)` : monthlySold) : '-';
+  const shopStatus = output.shop?.is_mall ? 'Shopee Mall' : output.shop?.is_preferred ? 'Star+' : 'Regular';
 
   csv += '=== INFO PRODUK ===\n';
   csv += 'Field,Value\n';
-  csv += `Nama Produk,"${(output.product?.name || '').replace(/"/g, '""')}"\n`;
+  csv += `Nama Produk,${esc(output.product?.name || '')}\n`;
   csv += `Harga Min,${output.product?.price_min || 0}\n`;
   csv += `Harga Max,${output.product?.price_max || 0}\n`;
   csv += `Rating,${output.product?.rating || 0}\n`;
   csv += `Total Terjual,${output.product?.total_sold || 0}\n`;
   csv += `Jumlah Ulasan,${output.product?.review_count || 0}\n`;
-  csv += `Terjual / Bulan (API),${output.monthly_sold?.value || 0}\n`;
+  csv += `Terjual / Bulan,${esc(soldDisplay)}\n`;
   csv += `Omset/Bulan (Quick),${output.omset?.quick_value || 0}\n`;
   csv += `Omset 30 Hari (Detail),${output.omset?.detail_value || 0}\n`;
   csv += `Faktor Koreksi,${output.omset?.correction_factor || 0}\n`;
-  csv += `URL,"${(output.url || '').replace(/"/g, '""')}"\n`;
-  csv += `Waktu Scraping,"${output.scraped_at || ''}"\n\n`;
+  csv += `URL,${esc(output.url || '')}\n`;
+  csv += `Waktu Scraping,${esc(output.scraped_at || '')}\n\n`;
 
   if (output.shop) {
     csv += '=== INFO TOKO ===\n';
     csv += 'Field,Value\n';
-    csv += `Nama Toko,"${(output.shop.name || '').replace(/"/g, '""')}"\n`;
-    csv += `Lokasi,"${(output.shop.location || '').replace(/"/g, '""')}"\n`;
+    csv += `Nama Toko,${esc(output.shop.name || '')}\n`;
+    csv += `Lokasi,${esc(output.shop.location || '')}\n`;
     csv += `Pengikut,${output.shop.follower_count || 0}\n`;
     csv += `Jumlah Produk,${output.shop.product_count || 0}\n`;
     csv += `Rating Toko,${output.shop.rating_star || 0}\n`;
-    csv += `Status,"${output.shop.is_mall ? 'Mall' : output.shop.is_preferred ? 'Star+' : 'Regular'}"\n\n`;
+    csv += `Status,${esc(shopStatus)}\n\n`;
   }
 
   csv += '=== VARIANTS ===\n';
   if (output.variants?.length) {
     csv += 'Tier 1,Tier 2,% Terjual,Harga\n';
-    output.variants.forEach(v => {
-      csv += `"${(v.tier1 || '-').replace(/"/g, '""')}","${(v.tier2 || '-').replace(/"/g, '""')}",${v.sales_percentage || 0}%,${v.price ?? ''}\n`;
+    const sortedV = [...output.variants].sort((a, b) => (b.sales_percentage || 0) - (a.sales_percentage || 0));
+    sortedV.forEach(v => {
+      csv += `${esc(v.tier1 || '-')},${esc(v.tier2 || '-')},${v.sales_percentage || 0}%,${v.price ?? ''}\n`;
     });
   } else {
     csv += 'Tidak ada varian\n';
@@ -117,7 +125,7 @@ function buildCSV(output) {
   if (reviewData.length) {
     csv += 'Stars,Date,User,Variant,Comment\n';
     reviewData.forEach(r => {
-      csv += `${r.stars || ''},"${r.date || ''}","${(r.user || '').replace(/"/g, '""')}","${(r.variant || '-').replace(/"/g, '""')}","${(r.comment || '').replace(/"/g, '""').replace(/\n/g, ' ')}"\n`;
+      csv += `${r.stars || ''},${esc(r.date || '')},${esc(r.user || '')},${esc(r.variant || '-')},${esc(r.comment || '')}\n`;
     });
   } else {
     csv += 'Tidak ada review yang sesuai filter\n';
@@ -128,10 +136,10 @@ function buildCSV(output) {
     csv += '\n=== INSIGHT KELUHAN PEMBELI ===\n';
     csv += 'Kategori Keluhan,Jumlah Terdeteksi,Persentase\n';
     (ri.pain_points || []).forEach(p => {
-      csv += `"${(p.label || '').replace(/"/g, '""')}",${p.count},${p.percentage}%\n`;
+      csv += `${esc(p.label || '')},${p.count},${p.percentage}%\n`;
     });
     if (ri.top_complaint_words?.length) {
-      csv += `"Top Kata Kunci Keluhan","${ri.top_complaint_words.map(w => `${w.word} (${w.count}x)`).join(', ')}"\n`;
+      csv += `"Top Kata Kunci Keluhan",${esc(ri.top_complaint_words.map(w => `${w.word} (${w.count}x)`).join(', '))}\n`;
     }
   }
 
@@ -140,17 +148,60 @@ function buildCSV(output) {
 
 /**
  * Buat string Tab-Separated Values (TSV) dari output.
- * Bisa langsung Ctrl+V ke Google Sheets / Excel tanpa instalasi apapun.
+ * Dilengkapi Tabel Master 1 Baris di atas agar langsung bisa dicopy ke spreadsheet tracking riset!
  */
 function buildTSV(output) {
   const T = '\t'; // tab
   const N = '\n'; // newline
-  const esc = (v) => String(v ?? '').replace(/\t/g, ' ').replace(/\n/g, ' ');
+  const esc = (v) => String(v ?? '').replace(/[\t\r\n]+/g, ' ').trim();
 
   let tsv = '';
 
-  // ── Sheet 1: Info Produk ──────────────────────────────────────
-  tsv += '=== INFO PRODUK ===' + N;
+  const monthlySold = output.monthly_sold?.value || output.omset?.sold_per_month || 0;
+  const isEstimated = !output.monthly_sold?.value && output.omset?.sold_per_month > 0;
+  const soldDisplay = monthlySold > 0 ? (isEstimated ? `${monthlySold} (est)` : monthlySold) : '-';
+  const omsetValue = output.omset?.quick_value || output.omset?.detail_value || 0;
+  const shopStatus = output.shop?.is_mall ? 'Shopee Mall' : output.shop?.is_preferred ? 'Star+' : 'Regular';
+  const topPain = output.review_insights?.pain_points?.[0]?.label || '-';
+
+  // ── 1. RINGKASAN MASTER SHEET (1 Baris Siap Masuk ke Spreadsheet Riset) ──
+  tsv += '=== 📊 MASTER TRACKING SHEET (1 BARIS PRODUK) ===' + N;
+  tsv += [
+    'Tanggal Scraping',
+    'Nama Produk',
+    'Toko',
+    'Lokasi',
+    'Status Toko',
+    'Harga Min',
+    'Harga Max',
+    'Terjual / Bln',
+    'Est. Omset / Bln',
+    'Rating',
+    'Total Review',
+    'Total Terjual',
+    'Top Keluhan',
+    'URL Produk'
+  ].join(T) + N;
+
+  tsv += [
+    esc(output.scraped_at ? output.scraped_at.split('T')[0] : new Date().toISOString().split('T')[0]),
+    esc(output.product?.name),
+    esc(output.shop?.name || '-'),
+    esc(output.shop?.location || '-'),
+    shopStatus,
+    output.product?.price_min || 0,
+    output.product?.price_max || 0,
+    soldDisplay,
+    omsetValue,
+    output.product?.rating || 0,
+    output.product?.review_count || 0,
+    output.product?.total_sold || 0,
+    esc(topPain),
+    esc(output.url)
+  ].join(T) + N + N;
+
+  // ── 2. INFO DETAIL PRODUK & ESTIMASI OMSET (Key-Value) ─────────
+  tsv += '=== ℹ️ DETAIL PRODUK & ESTIMASI OMSET ===' + N;
   tsv += 'Field' + T + 'Value' + N;
   tsv += 'Nama Produk'        + T + esc(output.product?.name)         + N;
   tsv += 'Harga Min'          + T + (output.product?.price_min || 0)  + N;
@@ -158,28 +209,27 @@ function buildTSV(output) {
   tsv += 'Rating'             + T + (output.product?.rating || 0)     + N;
   tsv += 'Total Terjual'      + T + (output.product?.total_sold || 0) + N;
   tsv += 'Jumlah Ulasan'      + T + (output.product?.review_count || 0) + N;
-  tsv += 'Terjual / Bulan'    + T + (output.monthly_sold?.value || 0) + N;
-  tsv += 'Sumber Sold/Bulan'  + T + esc(output.monthly_sold?.source)  + N;
+  tsv += 'Terjual / Bulan'    + T + soldDisplay                       + N;
+  tsv += 'Sumber Sold/Bulan'  + T + esc(output.monthly_sold?.source || output.omset?.sold_per_month_source || '-') + N;
   tsv += 'Omset Quick'        + T + (output.omset?.quick_value || 0)  + N;
   tsv += 'Omset Detail'       + T + (output.omset?.detail_value || 0) + N;
   tsv += 'Faktor Koreksi'     + T + (output.omset?.correction_factor || 0) + N;
-  tsv += 'Sumber Quick'       + T + esc(output.omset?.sold_per_month_source) + N;
   tsv += 'URL'                + T + esc(output.url)                   + N;
   tsv += 'Waktu Scraping'     + T + esc(output.scraped_at)            + N;
 
   if (output.shop) {
-    tsv += N + '=== INFO TOKO ===' + N;
+    tsv += N + '=== 🏪 INFO TOKO ===' + N;
     tsv += 'Field' + T + 'Value' + N;
     tsv += 'Nama Toko'       + T + esc(output.shop.name)            + N;
     tsv += 'Lokasi'          + T + esc(output.shop.location)         + N;
     tsv += 'Pengikut'        + T + (output.shop.follower_count || 0) + N;
     tsv += 'Jumlah Produk'   + T + (output.shop.product_count || 0) + N;
     tsv += 'Rating Toko'     + T + (output.shop.rating_star || 0)   + N;
-    tsv += 'Status'          + T + (output.shop.is_mall ? 'Mall' : output.shop.is_preferred ? 'Star+' : 'Regular') + N;
+    tsv += 'Status'          + T + shopStatus                        + N;
   }
 
   if (output.variants?.length) {
-    tsv += N + '=== VARIAN ===' + N;
+    tsv += N + '=== 📦 VARIAN PRODUK ===' + N;
     tsv += 'Tier 1' + T + 'Tier 2' + T + '% Terjual' + T + 'Harga' + N;
     const sortedV = [...output.variants].sort((a, b) => (b.sales_percentage || 0) - (a.sales_percentage || 0));
     sortedV.forEach(v => {
@@ -187,19 +237,9 @@ function buildTSV(output) {
     });
   }
 
-  const reviewData = output.filtered_reviews || output.negative_reviews || [];
-  if (reviewData.length) {
-    const filterLabel = output.star_filter_label ? ` (${output.star_filter_label})` : '';
-    tsv += N + `=== REVIEW${filterLabel} ===` + N;
-    tsv += 'Bintang' + T + 'Tanggal' + T + 'User' + T + 'Varian' + T + 'Komentar' + N;
-    reviewData.forEach(r => {
-      tsv += (r.stars || '') + T + esc(r.date) + T + esc(r.user) + T + esc(r.variant || '-') + T + esc(r.comment) + N;
-    });
-  }
-
   if (output.review_insights && (output.review_insights.pain_points?.length || output.review_insights.top_complaint_words?.length)) {
     const ri = output.review_insights;
-    tsv += N + '=== INSIGHT KELUHAN PEMBELI ===' + N;
+    tsv += N + '=== ⚠️ INSIGHT KELUHAN PEMBELI (PAIN POINTS) ===' + N;
     tsv += 'Kategori Keluhan' + T + 'Jumlah' + T + 'Persentase' + N;
     (ri.pain_points || []).forEach(p => {
       tsv += esc(p.label) + T + p.count + T + p.percentage + '%' + N;
@@ -207,6 +247,16 @@ function buildTSV(output) {
     if (ri.top_complaint_words?.length) {
       tsv += N + 'Top Kata Kunci Keluhan' + T + ri.top_complaint_words.map(w => `${w.word} (${w.count}x)`).join(', ') + N;
     }
+  }
+
+  const reviewData = output.filtered_reviews || output.negative_reviews || [];
+  if (reviewData.length) {
+    const filterLabel = output.star_filter_label ? ` (${output.star_filter_label})` : '';
+    tsv += N + `=== 💬 DAFTAR ULASAN PEMBELI${filterLabel} ===` + N;
+    tsv += 'Bintang' + T + 'Tanggal' + T + 'User' + T + 'Varian' + T + 'Komentar' + N;
+    reviewData.forEach(r => {
+      tsv += (r.stars || '') + T + esc(r.date) + T + esc(r.user) + T + esc(r.variant || '-') + T + esc(r.comment) + N;
+    });
   }
 
   return tsv;
@@ -1034,7 +1084,7 @@ function render(shadow, output) {
   const monthlyData = output.monthly_sold || {};
   
   if (msWrap && msSource) {
-    if (monthlyData.value !== null && monthlyData.value !== undefined) {
+    if (monthlyData.value !== null && monthlyData.value !== undefined && monthlyData.value > 0) {
       msWrap.textContent = Number(monthlyData.value).toLocaleString('id-ID');
       
       let sourceText = 'Tidak diketahui';
@@ -1053,11 +1103,19 @@ function render(shadow, output) {
       msSource.textContent = sourceText;
       msSource.className = 'data-source-badge ' + sourceClass;
       msSource.style.background = sourceClass === 'api' ? '#4CAF50' : (sourceClass === 'dom' ? '#FFC107' : '#F44336');
-      if(sourceClass === 'dom') msSource.style.color = '#000';
+      if (sourceClass === 'dom') msSource.style.color = '#000';
+    } else if (output.omset?.sold_per_month > 0) {
+      msWrap.textContent = Number(output.omset.sold_per_month).toLocaleString('id-ID') + ' (est)';
+      msSource.textContent = 'Estimasi dari Ulasan 30 Hari';
+      msSource.className = 'data-source-badge';
+      msSource.style.background = '#722ed1';
+      msSource.style.color = '#fff';
     } else {
       msWrap.textContent = '-';
-      msSource.textContent = 'Belum tersedia';
+      msSource.textContent = 'Belum tersedia di PDP';
+      msSource.className = 'data-source-badge';
       msSource.style.background = '#999';
+      msSource.style.color = '#fff';
     }
   }
 
@@ -1313,6 +1371,11 @@ async function renderHistoryList(shadow, filterKeyword = '') {
         month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
       }) : '-';
 
+      const isEst = item.monthly_sold_source === 'ESTIMATED' || String(item.sold_per_month_source || '').toLowerCase().includes('ulasan');
+      const soldDisplay = item.monthly_sold > 0
+        ? `${Number(item.monthly_sold).toLocaleString('id-ID')}${isEst ? ' (est)' : ''}`
+        : '-';
+
       html += `
         <div class="history-card">
           <div class="history-card-title" title="${escapeHTML(item.name)}">${escapeHTML(item.name)}</div>
@@ -1321,7 +1384,7 @@ async function renderHistoryList(shadow, filterKeyword = '') {
             <span>⭐ ${item.rating || 0} | ${Number(item.total_sold || 0).toLocaleString('id-ID')} terjual</span>
           </div>
           <div class="history-card-stats">
-            <div><b>Terjual/bln:</b> ${Number(item.monthly_sold || 0).toLocaleString('id-ID')}</div>
+            <div><b>Terjual/bln:</b> ${soldDisplay}</div>
             <div><b>Omset Quick:</b> ${item.omset_quick ? formatRupiah(item.omset_quick) : '-'}</div>
           </div>
           <div class="history-card-footer">

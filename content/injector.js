@@ -1505,15 +1505,29 @@
       return result;
     };
     
+  async function interruptibleSleep(ms) {
+    const step = 100;
+    let waited = 0;
+    while (waited < ms) {
+      if (window.CS_SHOPEE_STOP_FLAG) break;
+      await new Promise(r => setTimeout(r, step));
+      waited += step;
+    }
+  }
+
+  function getReviewDedupeKey(r) {
+    return String(r.rating_id || r.cmnt_id || `${r.author_username || r.username || 'anon'}_${(r.comment || r.content || '').slice(0, 30)}_${r.ctime || r.rating_star || ''}`);
+  }
+
     // === Tahap 0: Seed dari interceptor (ulasan yang sudah ditangkap saat page-load) ===
     const seenIds = new Set();
     if (interceptedData.reviews && interceptedData.reviews.length > 0) {
       for (const batch of interceptedData.reviews) {
         const found = extractRatings(batch);
         found.forEach(r => {
-          const id = r.rating_id || r.cmnt_id;
-          if (!id || !seenIds.has(id)) {
-            if (id) seenIds.add(id);
+          const id = getReviewDedupeKey(r);
+          if (!seenIds.has(id)) {
+            seenIds.add(id);
             allReviews.push(r);
           }
         });
@@ -1534,13 +1548,20 @@
     
     let totalReviewsOfficial = 0;
     try {
-      const item = interceptedData.product?.data?.item || interceptedData.product?.item || interceptedData.product;
+      const item = interceptedData.product?.data?.item ||
+                   interceptedData.product?.data ||
+                   interceptedData.product?.item ||
+                   interceptedData.product;
       const countArr = item?.item_rating?.rating_count || [];
-      totalReviewsOfficial = countArr[0] || item?.history_sold || 0;
+      totalReviewsOfficial = countArr[0] || item?.review_count || item?.historical_sold || 0;
+      if (!totalReviewsOfficial) {
+        const revEl = document.querySelector('div[class*="pdp-review-count"], a[class*="rating-count"], div[class*="OitLRu"]');
+        if (revEl) totalReviewsOfficial = extractNumber(revEl.textContent);
+      }
     } catch(e) {}
     
-    // PERBAIKAN: Ambil 100% ulasan, tidak dibatasi 30% lagi.
-    const targetScraped = totalReviewsOfficial > 0 ? Math.ceil(totalReviewsOfficial) : Infinity;
+    // Batasi targetScraped persis ke total review Shopee agar tidak terus melompat tanpa batas
+    const targetScraped = totalReviewsOfficial > 0 ? totalReviewsOfficial : Infinity;
     console.log(`%c[Shopee Scraper V3] 🎯 Target cakupan: ${targetScraped !== Infinity ? targetScraped : 'Semua'} review. Saat ini: ${allReviews.length}`, 'background: teal; color: white;');
 
       if (allReviews.length < targetScraped && !window.CS_SHOPEE_STOP_FLAG) {
@@ -1744,7 +1765,7 @@
                 
                 try {
                   fBtn.click();
-                  await new Promise(r => setTimeout(r, 2000));
+                  await interruptibleSleep(1500);
                   // Kita berhasil pindah tab, lanjut ke loop pagination lagi!
                   clicked = true;
                 } catch(e) {
@@ -1764,11 +1785,16 @@
             break;
           }
           
-          // Tunggu hingga interceptor menangkap batch baru setelah klik (max 6 detik)
+          // Tunggu hingga interceptor menangkap batch baru setelah klik (max 3.5 detik, cek stop tiap 150ms)
           const captured = await new Promise(resolve => {
             let waited = 0;
             const interval = setInterval(() => {
-              waited += 300;
+              waited += 150;
+              if (window.CS_SHOPEE_STOP_FLAG) {
+                clearInterval(interval);
+                resolve(0);
+                return;
+              }
               // Cek cache interceptor terus-menerus
               if (interceptedData.reviews && interceptedData.reviews.length > 0) {
                 const newBatches = interceptedData.reviews;
@@ -1776,9 +1802,9 @@
                 let newFound = 0;
                 newBatches.forEach(batch => {
                   extractRatings(batch).forEach(r => {
-                    const id = r.rating_id || r.cmnt_id;
-                    if (!id || !seenIds.has(id)) {
-                      if (id) seenIds.add(id);
+                    const id = getReviewDedupeKey(r);
+                    if (!seenIds.has(id)) {
+                      seenIds.add(id);
                       allReviews.push(r);
                       newFound++;
                     }
@@ -1790,11 +1816,11 @@
                   return;
                 }
               }
-              if (waited >= 6000) {
+              if (waited >= 3500) {
                 clearInterval(interval);
                 resolve(0);
               }
-            }, 300);
+            }, 150);
           });
 
           if (captured > 0) {
