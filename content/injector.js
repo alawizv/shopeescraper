@@ -112,6 +112,7 @@
       case 'search_items':
         // Ekstrak data "Terjual/Bulan" dari hasil pencarian Shopee
         extractMonthlySoldFromSearch(data);
+        processBulkSearchItems(data);
         break;
     }
   });
@@ -839,6 +840,113 @@
       }
     } catch (e) {
       console.warn('[Shopee Scraper] Gagal ekstrak monthly sold dari search:', e);
+    }
+  }
+
+  // ========================================
+  // 4.6 Olah Seluruh Data Pencarian (Bulk Scraper)
+  // ========================================
+  const bulkSearchProductsMap = new Map();
+
+  function processBulkSearchItems(searchData) {
+    try {
+      const rawItems = searchData?.data?.items ||
+                       searchData?.items ||
+                       searchData?.data?.item_brief_list ||
+                       searchData?.data?.sections?.[0]?.data?.item ||
+                       [];
+
+      if (!Array.isArray(rawItems) || rawItems.length === 0) return;
+
+      rawItems.forEach(entry => {
+        const item = entry?.item_basic || entry?.item || entry;
+        const itemId = item?.itemid || item?.item_id;
+        if (!itemId || !item.name) return;
+
+        const pmin = item.price_min !== undefined ? Math.round(item.price_min / 100000) : (item.price !== undefined ? Math.round(item.price / 100000) : 0);
+        const pmax = item.price_max !== undefined ? Math.round(item.price_max / 100000) : pmin;
+        const priceAvg = Math.round((pmin + pmax) / 2);
+        const monthlySold = item.sold || item.sold_per_month || 0;
+        const totalSold = item.historical_sold || item.total_sold || 0;
+        const omset = Math.round(monthlySold * priceAvg);
+
+        const ratingVal = item.item_rating?.rating_star || item.item_rating?.star || item.rating_star || 0;
+        const ratingStar = Math.round(ratingVal * 10) / 10;
+
+        const shopId = item.shopid || item.shop_id || null;
+        const url = `https://shopee.co.id/product/${shopId || '0'}/${itemId}`;
+
+        const productObj = {
+          itemid: String(itemId),
+          shopid: shopId ? String(shopId) : null,
+          name: item.name,
+          price_min: pmin,
+          price_max: pmax,
+          price_avg: priceAvg,
+          rating: ratingStar,
+          total_sold: totalSold,
+          monthly_sold: monthlySold,
+          estimated_omset: omset,
+          shop_location: item.shop_location || item.shop_location_clean || item.location || '-',
+          shop_name: item.shop_name || '-',
+          image: item.image ? `https://down-id.img.susercontent.com/file/${item.image}` : null,
+          url: url
+        };
+
+        bulkSearchProductsMap.set(String(itemId), productObj);
+      });
+
+      const allProducts = Array.from(bulkSearchProductsMap.values());
+      if (allProducts.length === 0) return;
+
+      // Hitung metrik pasar
+      const totalOmset = allProducts.reduce((acc, cur) => acc + (cur.estimated_omset || 0), 0);
+      const totalMonthlySold = allProducts.reduce((acc, cur) => acc + (cur.monthly_sold || 0), 0);
+      const prices = allProducts.map(p => p.price_avg).filter(p => p > 0);
+      const minPrice = prices.length ? Math.min(...prices) : 0;
+      const maxPrice = prices.length ? Math.max(...prices) : 0;
+      const avgPrice = prices.length ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : 0;
+      const ratings = allProducts.map(p => p.rating).filter(r => r > 0);
+      const avgRating = ratings.length ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10 : 0;
+
+      // Ambil keyword dari URL
+      let keyword = 'Pencarian Shopee';
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('keyword')) {
+          keyword = decodeURIComponent(urlParams.get('keyword'));
+        } else {
+          const path = window.location.pathname.replace(/^\/|\/$/g, '');
+          if (path.startsWith('search')) {
+            keyword = 'Pencarian Shopee';
+          } else if (path.length > 0) {
+            keyword = `Toko: ${path.split('/')[0]}`;
+          }
+        }
+      } catch (e) {}
+
+      const bulkPayload = {
+        keyword: keyword,
+        url: window.location.href,
+        captured_at: new Date().toISOString(),
+        total_products: allProducts.length,
+        stats: {
+          total_omset: totalOmset,
+          total_monthly_sold: totalMonthlySold,
+          min_price: minPrice,
+          max_price: maxPrice,
+          avg_price: avgPrice,
+          avg_rating: avgRating
+        },
+        products: allProducts
+      };
+
+      chrome.storage.local.set({ shopeeBulkSearchData: bulkPayload }, () => {
+        console.log(`%c[Shopee Scraper] 🔍 Bulk data tersimpan (${allProducts.length} produk). Total Omset: Rp ${totalOmset.toLocaleString('id-ID')}`, 'background: #531dab; color: #fff; font-weight: bold;');
+      });
+
+    } catch (e) {
+      console.warn('[Shopee Scraper] Gagal proses bulk search items:', e);
     }
   }
 
@@ -1913,6 +2021,7 @@
     setInterval(() => {
       if (window.location.href !== lastUrl) {
          lastUrl = window.location.href;
+         bulkSearchProductsMap.clear();
          if (checkIsProductPage()) {
             console.log('[Shopee Scraper] Navigasi SPA ke PDP terdeteksi, restart intercept/fallback...');
             interceptedData.product = null;

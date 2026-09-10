@@ -96,7 +96,7 @@
     const tab = await getActiveTab();
 
     if (!tab || !isShopeeProductURL(tab.url)) {
-      showNotProductPage();
+      showNotProductPage(tab ? tab.url : null);
       return;
     }
 
@@ -425,6 +425,47 @@
           renderPopupHistory();
           updatePopupHistoryCount();
         }
+      });
+    }
+
+    // ── Salin TSV Bulk Search di Popup ──
+    const btnPopupBulkTSV = document.getElementById('btn-popup-bulk-tsv');
+    if (btnPopupBulkTSV) {
+      btnPopupBulkTSV.addEventListener('click', async () => {
+        if (!cachedBulkData || !cachedBulkData.products || cachedBulkData.products.length === 0) return;
+        const tsv = buildBulkSearchTSV(cachedBulkData.products);
+        try {
+          await navigator.clipboard.writeText(tsv);
+          btnPopupBulkTSV.textContent = '✅ Tersalin!';
+        } catch (e) {
+          const blob = new Blob([tsv], { type: 'text/plain;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = `shopee_bulk_${Date.now()}.tsv`;
+          document.body.appendChild(a); a.click(); a.remove();
+          URL.revokeObjectURL(url);
+          btnPopupBulkTSV.textContent = '⬇️ Diunduh (.tsv)';
+        }
+        setTimeout(() => {
+          btnPopupBulkTSV.textContent = '📋 Salin ke Sheets (TSV)';
+        }, 2500);
+      });
+    }
+
+    // ── Simpan Bulk Search ke Riwayat di Popup ──
+    const btnPopupBulkSave = document.getElementById('btn-popup-bulk-save');
+    if (btnPopupBulkSave) {
+      btnPopupBulkSave.addEventListener('click', async () => {
+        if (!cachedBulkData || !cachedBulkData.products || cachedBulkData.products.length === 0) return;
+        btnPopupBulkSave.disabled = true;
+        btnPopupBulkSave.textContent = 'Menyimpan...';
+        const count = await ShopeeDB.saveBulkProducts(cachedBulkData.products);
+        btnPopupBulkSave.textContent = `✅ ${count} Tersimpan!`;
+        updatePopupHistoryCount();
+        setTimeout(() => {
+          btnPopupBulkSave.disabled = false;
+          btnPopupBulkSave.textContent = '📥 Simpan ke Riwayat';
+        }, 2500);
       });
     }
   }
@@ -874,12 +915,69 @@
     elements.statusText.textContent = text;
   }
 
-  function showNotProductPage() {
+  let cachedBulkData = null;
+
+  function loadBulkSearchData() {
+    chrome.storage.local.get('shopeeBulkSearchData', (res) => {
+      const data = res.shopeeBulkSearchData;
+      renderBulkSearchPopup(data);
+    });
+  }
+
+  function renderBulkSearchPopup(bulkData) {
+    const statsEl = document.getElementById('bulk-popup-stats');
+    const loadingEl = document.getElementById('bulk-popup-loading');
+    const actionsEl = document.getElementById('bulk-popup-actions');
+    const keywordEl = document.getElementById('bulk-popup-keyword');
+
+    if (!bulkData || !bulkData.products || bulkData.products.length === 0) {
+      if (statsEl) statsEl.classList.add('d-none');
+      if (actionsEl) actionsEl.classList.add('d-none');
+      if (loadingEl) loadingEl.classList.remove('d-none');
+      return;
+    }
+
+    cachedBulkData = bulkData;
+
+    if (loadingEl) loadingEl.classList.add('d-none');
+    if (statsEl) statsEl.classList.remove('d-none');
+    if (actionsEl) actionsEl.classList.remove('d-none');
+
+    if (keywordEl) {
+      keywordEl.textContent = `${bulkData.keyword || 'Pencarian Shopee'} (${bulkData.total_products} Produk)`;
+    }
+
+    const s = bulkData.stats || {};
+    const omsetEl = document.getElementById('bulk-popup-omset');
+    const soldEl = document.getElementById('bulk-popup-sold');
+    const priceEl = document.getElementById('bulk-popup-price');
+    const ratingEl = document.getElementById('bulk-popup-rating');
+
+    if (omsetEl) omsetEl.textContent = formatRupiah(s.total_omset || 0);
+    if (soldEl) soldEl.textContent = `${formatNumber(s.total_monthly_sold || 0)} terjual`;
+    if (priceEl) priceEl.textContent = formatRupiah(s.avg_price || 0);
+    if (ratingEl) ratingEl.textContent = `${s.avg_rating || 0} ⭐`;
+  }
+
+  function showNotProductPage(currentUrl) {
     elements.notProductPage.classList.remove('d-none');
     elements.mainContent.classList.add('d-none');
     elements.errorMessage.classList.add('d-none');
     hideLoading();
-    setStatus('idle', 'Bukan halaman produk');
+
+    const standardHint = document.getElementById('not-product-standard');
+    const searchHint = document.getElementById('is-search-page-hint');
+
+    if (currentUrl && (isShopeeSearchURL(currentUrl) || isShopeeShopURL(currentUrl))) {
+      setStatus('active', 'Mode Riset Pasar');
+      if (standardHint) standardHint.classList.add('d-none');
+      if (searchHint) searchHint.classList.remove('d-none');
+      loadBulkSearchData();
+    } else {
+      setStatus('idle', 'Bukan halaman produk');
+      if (standardHint) standardHint.classList.remove('d-none');
+      if (searchHint) searchHint.classList.add('d-none');
+    }
   }
 
   function showError(message) {
@@ -1037,7 +1135,48 @@
 
   function isShopeeProductURL(url) {
     if (!url) return false;
-    return /shopee\.co\.id\/.+-i\.\d+\.\d+/.test(url);
+    return /shopee\.co\.id\/.+-i\.\d+\.\d+/.test(url) || /shopee\.co\.id\/product\/\d+\/\d+/.test(url);
+  }
+
+  function isShopeeSearchURL(url) {
+    if (!url) return false;
+    return /shopee\.co\.id\/search/.test(url);
+  }
+
+  function isShopeeShopURL(url) {
+    const u = url || '';
+    if (isShopeeProductURL(u) || isShopeeSearchURL(u)) return false;
+    try {
+      const p = new URL(u).pathname.replace(/^\/|\/$/g, '');
+      const reserved = ['cart', 'user', 'buyer', 'checkout', 'daily_discover', 'flash_sale', 'top_products', 'm', 'portal', 'api', 'help'];
+      return p.length > 0 && !reserved.includes(p.split('/')[0]);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function buildBulkSearchTSV(products) {
+    const T = '\t';
+    const N = '\n';
+    const esc = (v) => String(v ?? '').replace(/\t/g, ' ').replace(/\n/g, ' ');
+
+    let tsv = 'No' + T + 'Nama Produk' + T + 'Estimasi Omset/Bulan' + T + 'Terjual/Bulan' + T + 'Total Terjual' + T + 'Harga Min' + T + 'Harga Max' + T + 'Rating' + T + 'Lokasi' + T + 'Toko' + T + 'URL' + N;
+
+    products.forEach((p, idx) => {
+      tsv += (idx + 1) + T +
+        esc(p.name) + T +
+        (p.estimated_omset || 0) + T +
+        (p.monthly_sold || 0) + T +
+        (p.total_sold || 0) + T +
+        (p.price_min || 0) + T +
+        (p.price_max || 0) + T +
+        (p.rating || 0) + T +
+        esc(p.shop_location || '-') + T +
+        esc(p.shop_name || '-') + T +
+        esc(p.url || '') + N;
+    });
+
+    return tsv;
   }
 
   function extractProductSlug(url) {
@@ -1155,6 +1294,13 @@
     if (message.action === 'REFRESH_POPUP' && message.data) {
       console.log('[Popup] Menerima update data real-time');
       processRawData(message.data);
+    }
+  });
+
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'local') return;
+    if (changes.shopeeBulkSearchData) {
+      renderBulkSearchPopup(changes.shopeeBulkSearchData.newValue);
     }
   });
 

@@ -32,10 +32,56 @@
 
     <!-- View: Produk Aktif -->
     <div id="view-active-product">
-      <!-- Pesan jika bukan halaman produk -->
+      <!-- Pesan jika bukan halaman produk / mode riset pasar -->
       <div id="not-product-page" class="message-box warning d-none">
-        <p>⚠️ Buka halaman produk Shopee terlebih dahulu.</p>
-        <p class="hint">Contoh: shopee.co.id/nama-produk-i.123456.789012</p>
+        <div id="not-product-standard">
+          <p>⚠️ Buka halaman produk Shopee terlebih dahulu.</p>
+          <p class="hint">Contoh: shopee.co.id/nama-produk-i.123456.789012</p>
+        </div>
+
+        <div id="is-search-page-hint" class="d-none">
+          <div class="bulk-popup-header">
+            <span class="bulk-popup-tag">🔍 Mode Riset Pasar</span>
+            <div id="bulk-popup-keyword" class="bulk-popup-title">Pencarian Shopee</div>
+          </div>
+
+          <div id="bulk-popup-stats" class="bulk-popup-grid d-none">
+            <div class="bulk-popup-stat-card">
+              <span class="bulk-stat-label">💰 Est. Omset Pasar</span>
+              <span class="bulk-stat-val" id="bulk-popup-omset">-</span>
+            </div>
+            <div class="bulk-popup-stat-card">
+              <span class="bulk-stat-label">📦 Terjual / Bln</span>
+              <span class="bulk-stat-val" id="bulk-popup-sold">-</span>
+            </div>
+            <div class="bulk-popup-stat-card">
+              <span class="bulk-stat-label">🏷️ Harga Rata-rata</span>
+              <span class="bulk-stat-val" id="bulk-popup-price">-</span>
+            </div>
+            <div class="bulk-popup-stat-card">
+              <span class="bulk-stat-label">⭐ Rating Rata-rata</span>
+              <span class="bulk-stat-val" id="bulk-popup-rating">-</span>
+            </div>
+          </div>
+
+          <div id="bulk-popup-loading" class="bulk-popup-loading">
+            <p>⏳ Menangkap data produk pencarian...</p>
+            <p style="font-size: 10px; color: #888; margin-top: 4px;">Scroll ke bawah pada halaman Shopee jika produk belum terbaca.</p>
+          </div>
+
+          <div id="bulk-popup-actions" class="bulk-popup-actions d-none">
+            <button type="button" id="btn-popup-bulk-tsv" class="btn btn-primary" style="flex: 1; font-size: 11px; padding: 7px 10px;">
+              📋 Salin ke Sheets (TSV)
+            </button>
+            <button type="button" id="btn-popup-bulk-save" class="btn btn-secondary" style="flex: 1; font-size: 11px; padding: 7px 10px;">
+              📥 Simpan ke Riwayat
+            </button>
+          </div>
+
+          <div class="bulk-popup-hint">
+            💡 <b>Tabel Interaktif:</b> Buka floating panel di sudut kanan bawah halaman web Shopee untuk melihat tabel urut omset 60 produk kompetitor.
+          </div>
+        </div>
       </div>
 
       <!-- Pesan error -->

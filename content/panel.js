@@ -10,7 +10,31 @@
 
 /** Cek URL halaman produk Shopee */
 function isShopeeProductPage(url) {
-  return /shopee\.co\.id\/.+-i\.\d+\.\d+/.test(url || location.href);
+  return /shopee\.co\.id\/.+-i\.\d+\.\d+/.test(url || location.href) || /shopee\.co\.id\/product\/\d+\/\d+/.test(url || location.href);
+}
+
+/** Cek URL halaman pencarian Shopee */
+function isShopeeSearchPage(url) {
+  return /shopee\.co\.id\/search/.test(url || location.href);
+}
+
+/** Cek URL halaman etalase toko Shopee */
+function isShopeeShopPage(url) {
+  const u = url || location.href;
+  if (isShopeeProductPage(u) || isShopeeSearchPage(u)) return false;
+  try {
+    const p = new URL(u).pathname.replace(/^\/|\/$/g, '');
+    const reserved = ['cart', 'user', 'buyer', 'checkout', 'daily_discover', 'flash_sale', 'top_products', 'm', 'portal', 'api', 'help'];
+    return p.length > 0 && !reserved.includes(p.split('/')[0]);
+  } catch(e) {
+    return false;
+  }
+}
+
+/** Cek apakah halaman didukung oleh scraper (produk, search, atau toko) */
+function isSupportedShopeePage(url) {
+  const u = url || location.href;
+  return isShopeeProductPage(u) || isShopeeSearchPage(u) || isShopeeShopPage(u);
 }
 
 function formatRupiah(num) {
@@ -507,6 +531,41 @@ function createPanel() {
         background: #fff1f0;
       }
 
+      /* Bulk Scraper Styles */
+      .badge.search { background: #f9f0ff; color: #722ed1; border: 1px solid #d3adf7; }
+      .bulk-thumb {
+        width: 30px;
+        height: 30px;
+        object-fit: cover;
+        border-radius: 4px;
+        border: 1px solid #eee;
+        flex-shrink: 0;
+      }
+      .bulk-prod-cell {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        max-width: 160px;
+      }
+      .bulk-prod-title {
+        font-size: 10px;
+        line-height: 1.25;
+        font-weight: 600;
+        color: #222;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .bulk-rank {
+        font-size: 9.5px;
+        font-weight: 800;
+        color: #888;
+        text-align: center;
+      }
+      .bulk-rank.top3 {
+        color: #ee4d2d;
+      }
 
       .section-title {
         display: flex;
@@ -702,6 +761,70 @@ function createPanel() {
               <tr><th style="width:35px">⭐</th><th>User</th><th>Komentar</th></tr>
             </thead>
             <tbody id="negTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Body Bulk Scraper (Pencarian & Toko) -->
+      <div class="body" id="bodyBulk" style="display:none;">
+        <!-- Header Info Pencarian -->
+        <div style="background:#fff8f0; border:1px solid #ffd591; border-radius:8px; padding:8px 10px; margin-bottom:10px;">
+          <div style="font-size:12px; font-weight:800; color:#d4380d;" id="bulkKeywordTitle">🔍 Riset Pencarian</div>
+          <div style="font-size:10px; color:#888; margin-top:2px;" id="bulkDetectedCount">Menunggu produk terdeteksi dari Shopee...</div>
+        </div>
+
+        <!-- Metrik Pasar (Market Overview) -->
+        <div class="grid" style="grid-template-columns: 1fr 1fr; margin-bottom:8px;">
+          <div class="card">
+            <div class="k">Est. Omset Pasar 💰</div>
+            <div class="v" id="bulkTotalOmset" style="font-size:13px; color:#ee4d2d;">—</div>
+            <div style="font-size:9px; color:#888;" id="bulkTotalSoldUnit">0 terjual / bln</div>
+          </div>
+          <div class="card">
+            <div class="k">Rata-rata Harga 🏷️</div>
+            <div class="v" id="bulkAvgPrice" style="font-size:13px;">—</div>
+            <div style="font-size:9px; color:#888;" id="bulkPriceRange">Min: - | Max: -</div>
+          </div>
+        </div>
+
+        <!-- Tombol Aksi Bulk -->
+        <div class="actions" style="margin-bottom:10px;">
+          <button class="btn tsv" id="btnBulkTSV" title="Salin seluruh tabel produk ke clipboard (TSV) — langsung paste ke Sheets / Excel">📋 Salin ke Sheets</button>
+          <button class="btn" id="btnBulkCSV" title="Unduh CSV seluruh produk">📊 CSV</button>
+          <button class="btn primary" id="btnBulkSaveHistory" title="Simpan seluruh produk ini ke database Riwayat">📥 Simpan ke Riwayat</button>
+        </div>
+
+        <!-- Baris Pengurutan (Sorting) -->
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; font-size:10.5px; color:#666;">
+          <span><b>Urutkan:</b></span>
+          <div style="display:flex; gap:4px;">
+            <button class="btn-mini load" id="sortOmset" title="Omset tertinggi">Omset 🔽</button>
+            <button class="btn-mini" id="sortSold" title="Penjualan bulanan terbanyak">Terjual 🔽</button>
+            <button class="btn-mini" id="sortPrice" title="Harga termurah">Harga 🔼</button>
+            <button class="btn-mini" id="sortRating" title="Rating tertinggi">Rating ⭐</button>
+          </div>
+        </div>
+
+        <!-- Tabel Daftar Produk -->
+        <div id="bulkTableWrap" style="max-height:360px; overflow-y:auto; border:1px solid #eee; border-radius:8px; background:#fff;">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:20px; text-align:center;">#</th>
+                <th>Produk</th>
+                <th style="text-align:right;">Harga</th>
+                <th style="text-align:right;">Terjual/bln</th>
+                <th style="text-align:right;">Omset</th>
+                <th style="width:30px; text-align:center;">Link</th>
+              </tr>
+            </thead>
+            <tbody id="bulkTableTbody">
+              <tr>
+                <td colspan="6" style="text-align:center; padding:25px 10px; color:#999;">
+                  Gulir (scroll) halaman Shopee untuk mendeteksi produk...
+                </td>
+              </tr>
+            </tbody>
           </table>
         </div>
       </div>
@@ -1130,6 +1253,172 @@ async function renderHistoryList(shadow, filterKeyword = '') {
   }
 }
 
+// ── State & Fungsi Bulk Scraper (Pencarian & Toko) ──
+let currentBulkProducts = [];
+let currentBulkSort = 'omset';
+
+function renderBulkSearch(shadow, bulkData) {
+  if (!bulkData) return;
+  const products = bulkData.products || [];
+  currentBulkProducts = [...products];
+
+  const kwTitle = shadow.getElementById('bulkKeywordTitle');
+  if (kwTitle) {
+    kwTitle.textContent = bulkData.keyword ? `🔍 ${bulkData.keyword}` : '🔍 Riset Pencarian';
+  }
+
+  const countEl = shadow.getElementById('bulkDetectedCount');
+  if (countEl) {
+    countEl.textContent = products.length > 0
+      ? `✅ ${products.length} produk terdeteksi (scroll halaman untuk menambah)`
+      : 'Menunggu produk terdeteksi dari Shopee...';
+  }
+
+  const badgeCount = shadow.getElementById('panelBulkCount');
+  if (badgeCount) badgeCount.textContent = products.length;
+
+  const stats = bulkData.stats || {};
+  const omsetEl = shadow.getElementById('bulkTotalOmset');
+  if (omsetEl) omsetEl.textContent = formatRupiah(stats.total_omset || 0);
+
+  const soldUnitEl = shadow.getElementById('bulkTotalSoldUnit');
+  if (soldUnitEl) soldUnitEl.textContent = `${Number(stats.total_monthly_sold || 0).toLocaleString('id-ID')} unit terjual / bln`;
+
+  const avgPriceEl = shadow.getElementById('bulkAvgPrice');
+  if (avgPriceEl) avgPriceEl.textContent = formatRupiah(stats.avg_price || 0);
+
+  const priceRangeEl = shadow.getElementById('bulkPriceRange');
+  if (priceRangeEl) priceRangeEl.textContent = `Min: ${formatRupiah(stats.min_price || 0)} | Max: ${formatRupiah(stats.max_price || 0)}`;
+
+  renderBulkTable(shadow);
+}
+
+function renderBulkTable(shadow) {
+  const tbody = shadow.getElementById('bulkTableTbody');
+  if (!tbody) return;
+
+  if (!currentBulkProducts || currentBulkProducts.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" style="text-align:center; padding:25px 10px; color:#999;">
+          Belum ada produk terdeteksi. Gulir (scroll) halaman Shopee untuk memuat produk...
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  // Pengurutan
+  const sorted = [...currentBulkProducts].sort((a, b) => {
+    if (currentBulkSort === 'omset') return (b.estimated_omset || 0) - (a.estimated_omset || 0);
+    if (currentBulkSort === 'sold') return (b.monthly_sold || 0) - (a.monthly_sold || 0);
+    if (currentBulkSort === 'price') return (a.price_min || 0) - (b.price_min || 0);
+    if (currentBulkSort === 'rating') return (b.rating || 0) - (a.rating || 0);
+    return 0;
+  });
+
+  let html = '';
+  sorted.forEach((p, idx) => {
+    const rankClass = idx < 3 ? 'bulk-rank top3' : 'bulk-rank';
+    const rankBadge = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
+    const imgTag = p.image ? `<img src="${escapeHTML(p.image)}" class="bulk-thumb" loading="lazy">` : '';
+
+    html += `
+      <tr>
+        <td class="${rankClass}">${rankBadge}</td>
+        <td>
+          <div class="bulk-prod-cell">
+            ${imgTag}
+            <div class="bulk-prod-title" title="${escapeHTML(p.name)}">${escapeHTML(p.name)}</div>
+          </div>
+        </td>
+        <td style="text-align:right; font-weight:700; white-space:nowrap; font-size:10.5px;">${formatRupiah(p.price_min)}</td>
+        <td style="text-align:right; white-space:nowrap; font-size:10.5px; color:#666;">${Number(p.monthly_sold || 0).toLocaleString('id-ID')}</td>
+        <td style="text-align:right; font-weight:800; color:#ee4d2d; white-space:nowrap; font-size:10.5px;">${p.estimated_omset ? formatRupiah(p.estimated_omset) : '-'}</td>
+        <td style="text-align:center;">
+          <a href="${escapeHTML(p.url)}" target="_blank" class="btn-mini" style="padding:2px 5px;" title="Buka produk di tab baru">🔗</a>
+        </td>
+      </tr>
+    `;
+  });
+
+  tbody.innerHTML = html;
+}
+
+function buildBulkSearchTSV(products) {
+  const T = '\t';
+  const N = '\n';
+  const esc = (v) => String(v ?? '').replace(/\t/g, ' ').replace(/\n/g, ' ');
+
+  let tsv = 'Rank' + T +
+            'Nama Produk' + T +
+            'Harga Min' + T +
+            'Harga Max' + T +
+            'Rating' + T +
+            'Terjual / Bulan' + T +
+            'Total Terjual' + T +
+            'Est. Omset / Bulan' + T +
+            'Lokasi Toko' + T +
+            'URL Produk' + N;
+
+  (products || []).forEach((p, idx) => {
+    tsv += (idx + 1) + T +
+           esc(p.name) + T +
+           (p.price_min || 0) + T +
+           (p.price_max || 0) + T +
+           (p.rating || 0) + T +
+           (p.monthly_sold || 0) + T +
+           (p.total_sold || 0) + T +
+           (p.estimated_omset || 0) + T +
+           esc(p.shop_location) + T +
+           esc(p.url) + N;
+  });
+
+  return tsv;
+}
+
+function buildBulkSearchCSV(products) {
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+
+  let csv = 'Rank,Nama Produk,Harga Min,Harga Max,Rating,Terjual / Bulan,Total Terjual,Est. Omset / Bulan,Lokasi Toko,URL Produk\n';
+
+  (products || []).forEach((p, idx) => {
+    csv += `${idx + 1},${esc(p.name)},${p.price_min || 0},${p.price_max || 0},${p.rating || 0},${p.monthly_sold || 0},${p.total_sold || 0},${p.estimated_omset || 0},${esc(p.shop_location)},${esc(p.url)}\n`;
+  });
+
+  return '\uFEFF' + csv;
+}
+
+function switchPanelMode(shadow) {
+  const isSearchOrShop = isShopeeSearchPage(location.href) || isShopeeShopPage(location.href);
+  const isProduct = isShopeeProductPage(location.href);
+
+  const tabActive = shadow.getElementById('tabBtnActive');
+  const tabHistory = shadow.getElementById('tabBtnHistory');
+  const bodyActive = shadow.getElementById('bodyActive');
+  const bodyBulk = shadow.getElementById('bodyBulk');
+  const bodyHistory = shadow.getElementById('bodyHistory');
+
+  if (tabActive) tabActive.classList.add('active');
+  if (tabHistory) tabHistory.classList.remove('active');
+  if (bodyHistory) bodyHistory.style.display = 'none';
+
+  if (isSearchOrShop) {
+    if (tabActive) tabActive.innerHTML = `🔍 Riset Pasar <span class="tab-badge" id="panelBulkCount">${currentBulkProducts.length}</span>`;
+    if (bodyActive) bodyActive.style.display = 'none';
+    if (bodyBulk) bodyBulk.style.display = 'block';
+    setBadge(shadow, isShopeeSearchPage(location.href) ? 'Search 🔍' : 'Toko 🏪', 'search');
+    chrome.storage.local.get('shopeeBulkSearchData', (res) => {
+      if (res.shopeeBulkSearchData) renderBulkSearch(shadow, res.shopeeBulkSearchData);
+    });
+  } else if (isProduct) {
+    if (tabActive) tabActive.innerHTML = '📦 Produk Aktif';
+    if (bodyActive) bodyActive.style.display = 'block';
+    if (bodyBulk) bodyBulk.style.display = 'none';
+    refreshFromStorage(shadow);
+  }
+}
+
 // ── Kirim perintah ke injector via background ──
 function forwardToInjector(payload) {
   return chrome.runtime.sendMessage({ action: 'PANEL_FORWARD_TO_TAB', payload }).then(resp => {
@@ -1238,9 +1527,9 @@ async function mountPanel() {
   // Cegah double inject
   if (document.getElementById('shopee-scraper-panel-host')) return;
 
-  // JANGAN inject panel jika bukan halaman detail produk
-  if (!isShopeeProductPage(location.href)) {
-    console.log('[Shopee Scraper Panel] Bukan halaman produk, panel tidak dimuat.');
+  // JANGAN inject panel jika bukan halaman yang didukung (produk, pencarian, atau toko)
+  if (!isSupportedShopeePage(location.href)) {
+    console.log('[Shopee Scraper Panel] Bukan halaman produk, pencarian, atau toko, panel tidak dimuat.');
     return;
   }
 
@@ -1265,7 +1554,7 @@ async function mountPanel() {
   });
 
   // ── Set visibility awal ──
-  if (isShopeeProductPage(location.href)) {
+  if (isSupportedShopeePage(location.href)) {
     panel.style.display = 'flex';
     mini.style.display = 'none';
   } else {
@@ -1423,18 +1712,26 @@ async function mountPanel() {
     }
   });
 
-  // ── Tab Navigasi (Produk Aktif vs Riwayat) ──
+  // ── Tab Navigasi (Produk Aktif / Riset Pasar vs Riwayat) ──
   const tabBtnActive = shadow.getElementById('tabBtnActive');
   const tabBtnHistory = shadow.getElementById('tabBtnHistory');
   const bodyActive = shadow.getElementById('bodyActive');
+  const bodyBulk = shadow.getElementById('bodyBulk');
   const bodyHistory = shadow.getElementById('bodyHistory');
 
   if (tabBtnActive && tabBtnHistory) {
     tabBtnActive.addEventListener('click', () => {
       tabBtnActive.classList.add('active');
       tabBtnHistory.classList.remove('active');
-      if (bodyActive) bodyActive.style.display = 'block';
       if (bodyHistory) bodyHistory.style.display = 'none';
+      const isSearchOrShop = isShopeeSearchPage(location.href) || isShopeeShopPage(location.href);
+      if (isSearchOrShop) {
+        if (bodyBulk) bodyBulk.style.display = 'block';
+        if (bodyActive) bodyActive.style.display = 'none';
+      } else {
+        if (bodyActive) bodyActive.style.display = 'block';
+        if (bodyBulk) bodyBulk.style.display = 'none';
+      }
     });
 
     tabBtnHistory.addEventListener('click', () => {
@@ -1442,9 +1739,91 @@ async function mountPanel() {
       tabBtnActive.classList.remove('active');
       if (bodyHistory) bodyHistory.style.display = 'block';
       if (bodyActive) bodyActive.style.display = 'none';
+      if (bodyBulk) bodyBulk.style.display = 'none';
       renderHistoryList(shadow);
     });
   }
+
+  // ── Event Listener untuk Bulk Scraper ──
+  const btnBulkTSV = shadow.getElementById('btnBulkTSV');
+  if (btnBulkTSV) {
+    btnBulkTSV.addEventListener('click', async () => {
+      if (!currentBulkProducts || currentBulkProducts.length === 0) {
+        alert('Belum ada data produk pencarian yang terdeteksi. Gulir halaman Shopee terlebih dahulu.');
+        return;
+      }
+      const tsv = buildBulkSearchTSV(currentBulkProducts);
+      try {
+        await navigator.clipboard.writeText(tsv);
+        btnBulkTSV.textContent = '✅ Tersalin!';
+        btnBulkTSV.style.borderColor = '#2e7d32';
+        btnBulkTSV.style.color = '#2e7d32';
+      } catch (e) {
+        const blob = new Blob([tsv], { type: 'text/plain;charset=utf-8;' });
+        downloadBlob(blob, `shopee_bulk_${Date.now()}.tsv`);
+        btnBulkTSV.textContent = '⬇️ Diunduh (.tsv)';
+      }
+      setTimeout(() => {
+        btnBulkTSV.textContent = '📋 Salin ke Sheets';
+        btnBulkTSV.style.borderColor = '';
+        btnBulkTSV.style.color = '';
+      }, 2500);
+    });
+  }
+
+  const btnBulkCSV = shadow.getElementById('btnBulkCSV');
+  if (btnBulkCSV) {
+    btnBulkCSV.addEventListener('click', () => {
+      if (!currentBulkProducts || currentBulkProducts.length === 0) {
+        alert('Belum ada data produk pencarian.');
+        return;
+      }
+      const csv = buildBulkSearchCSV(currentBulkProducts);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      downloadBlob(blob, `shopee_bulk_${Date.now()}.csv`);
+    });
+  }
+
+  const btnBulkSaveHist = shadow.getElementById('btnBulkSaveHistory');
+  if (btnBulkSaveHist) {
+    btnBulkSaveHist.addEventListener('click', async () => {
+      if (!currentBulkProducts || currentBulkProducts.length === 0) {
+        alert('Belum ada data produk pencarian untuk disimpan.');
+        return;
+      }
+      btnBulkSaveHist.disabled = true;
+      btnBulkSaveHist.textContent = 'Menyimpan...';
+      const count = await ShopeeDB.saveBulkProducts(currentBulkProducts);
+      btnBulkSaveHist.textContent = `✅ ${count} Tersimpan!`;
+      updatePanelHistoryCount(shadow);
+      setTimeout(() => {
+        btnBulkSaveHist.disabled = false;
+        btnBulkSaveHist.textContent = '📥 Simpan ke Riwayat';
+      }, 2500);
+    });
+  }
+
+  // Tombol Pengurutan Bulk (Sorting)
+  const sortBtns = {
+    sortOmset: 'omset',
+    sortSold: 'sold',
+    sortPrice: 'price',
+    sortRating: 'rating'
+  };
+  Object.keys(sortBtns).forEach(id => {
+    const btn = shadow.getElementById(id);
+    if (btn) {
+      btn.addEventListener('click', () => {
+        currentBulkSort = sortBtns[id];
+        Object.keys(sortBtns).forEach(bId => {
+          const b = shadow.getElementById(bId);
+          if (b) b.classList.toggle('load', bId === id);
+        });
+        renderBulkTable(shadow);
+      });
+    }
+  });
+
 
   // ── Pencarian Riwayat Produk ──
   const historySearchInput = shadow.getElementById('historySearchInput');
@@ -1519,40 +1898,40 @@ async function mountPanel() {
   activeShadow = shadow;
 
   // ── Render awal ──
-  await refreshFromStorage(shadow);
+  switchPanelMode(shadow);
 }
 
 // Shadow root panel yang sedang terpasang (null saat panel tidak ada)
 let activeShadow = null;
 
-// ── Auto update saat storage berubah (intercept / DOM fallback selesai) ──
-// Didaftarkan SEKALI di level modul. Kalau didaftarkan di dalam mountPanel(),
-// listener akan menumpuk setiap kali user berpindah produk lewat navigasi SPA.
+// ── Auto update saat storage berubah ──
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local') return;
-  if (!changes.shopeeScraperData) return;
-  if (!isShopeeProductPage(location.href)) return; // Abaikan jika pindah halaman non-produk (SPA)
   if (!activeShadow || !document.getElementById('shopee-scraper-panel-host')) return;
-  refreshFromStorage(activeShadow);
+
+  if (changes.shopeeScraperData && isShopeeProductPage(location.href)) {
+    refreshFromStorage(activeShadow);
+  }
+  if (changes.shopeeBulkSearchData && (isShopeeSearchPage(location.href) || isShopeeShopPage(location.href))) {
+    renderBulkSearch(activeShadow, changes.shopeeBulkSearchData.newValue);
+  }
 });
 
 // ── Deteksi navigasi SPA Shopee ──
-// Panel hanya dipasang saat halaman produk. Tanpa pengawas ini, user yang
-// membuka Shopee dari halaman non-produk (beranda/pencarian) lalu masuk ke
-// halaman produk tidak akan pernah melihat panel, karena content script hanya
-// dievaluasi sekali di document_end.
-// Catatan: yang diawasi hanya pemasangan/pelepasan panel — TIDAK ada auto-scrape
-// per detik, agar tidak memicu "Extension context invalidated".
 (function watchSpaNavigation() {
   let lastUrl = location.href;
 
   const syncPanelWithUrl = () => {
     const existingHost = document.getElementById('shopee-scraper-panel-host');
 
-    if (isShopeeProductPage(location.href)) {
-      if (!existingHost) mountPanel();
+    if (isSupportedShopeePage(location.href)) {
+      if (!existingHost) {
+        mountPanel();
+      } else if (activeShadow) {
+        switchPanelMode(activeShadow);
+      }
     } else if (existingHost) {
-      // Pindah ke halaman non-produk — lepas panel agar tidak menampilkan data basi
+      // Pindah ke halaman yang tidak didukung — lepas panel
       existingHost.remove();
       activeShadow = null;
     }

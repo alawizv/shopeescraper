@@ -210,6 +210,46 @@ var ShopeeDB = (typeof ShopeeDB !== 'undefined' && ShopeeDB) ? ShopeeDB : (funct
       }
     },
 
+    /**
+     * Simpan batch produk dari hasil pencarian (Bulk Scraper)
+     */
+    async saveBulkProducts(products) {
+      if (!Array.isArray(products) || products.length === 0) return 0;
+      let count = 0;
+      for (const p of products) {
+        if (!p || !p.name) continue;
+        const record = {
+          id: String(p.itemid),
+          itemid: String(p.itemid),
+          shopid: p.shopid ? String(p.shopid) : null,
+          name: p.name,
+          price_min: p.price_min || 0,
+          price_max: p.price_max || 0,
+          rating: p.rating || 0,
+          total_sold: p.total_sold || 0,
+          monthly_sold: p.monthly_sold || 0,
+          monthly_sold_source: 'SEARCH_API',
+          omset_quick: p.estimated_omset || 0,
+          omset_detail: p.estimated_omset || 0,
+          sold_per_month_source: 'SEARCH_API',
+          shop_name: p.shop_name || '-',
+          shop_location: p.shop_location || '-',
+          url: p.url || '',
+          scraped_at: new Date().toISOString(),
+          variants_count: 0
+        };
+        try {
+          if (isContentScript()) {
+            await sendToBackground('DB_SAVE_PRODUCT', { record });
+          } else {
+            await directSave(record);
+          }
+          count++;
+        } catch (e) {}
+      }
+      return count;
+    },
+
     async getAll() {
       if (isContentScript()) {
         return (await sendToBackground('DB_GET_ALL')) || [];
