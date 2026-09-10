@@ -1,14 +1,38 @@
 # 🛍️ Shopee Product Scraper — Chrome Extension
 
-Chrome Extension MV3 untuk men-scrape data produk dari halaman produk Shopee Indonesia.
+Chrome Extension (Manifest V3) untuk riset produk dan analisis kompetitor di Shopee.
+Mengambil data produk, varian, estimasi omset, dan menganalisis keluhan pembeli —
+langsung dari halaman Shopee, tanpa perlu login ke mana pun.
+
+Mendukung **11 negara Shopee** (Indonesia, Singapura, Malaysia, Filipina, Thailand,
+Vietnam, Taiwan, Brasil, Meksiko, Kolombia, Chili) dengan simbol mata uang otomatis.
 
 ## ✨ Fitur
 
-- **Data Produk**: Nama, harga, rating, total terjual, jumlah ulasan
-- **Varian Produk**: Tier 1 & 2 (warna, ukuran, dll.) dengan stok dan harga per kombinasi
-- **Review Negatif**: Bintang 1–3 dengan komentar, tanggal, username, dan varian yang dibeli
-- **Export**: JSON, CSV, dan Google Sheets
-- **Otomatis**: Intercept API Shopee dengan fallback ke DOM scraping
+### Riset satu produk
+- **Data produk** — nama, harga, rating, total terjual, jumlah ulasan
+- **Varian** — tier 1 & 2 (warna, ukuran, dll.) lengkap dengan harga dan persentase penjualan per varian
+- **Terjual / bulan** — diambil dari API Shopee, dengan label sumber datanya (PDP API / Search API / DOM)
+- **Estimasi omset** — dua metode sekaligus, lihat [Cara Membaca Angkanya](#cara-membaca-angkanya)
+- **Info toko** — nama, lokasi, jumlah pengikut, rating, status Mall / Star+ / Regular
+
+### Analisis ulasan
+- **Filter bintang** — pilih bebas (semua / negatif 1–3★ / 1★ saja / kombinasi sendiri)
+- **Insight keluhan pembeli** — ulasan dikelompokkan otomatis ke 6 kategori masalah:
+  kualitas bahan, barang rusak, ukuran tidak sesuai, pengiriman lambat,
+  tidak sesuai foto, dan fungsi bermasalah
+- **Sentimen & kata kunci** — persentase ulasan positif dan kata keluhan yang paling sering muncul
+- Hanya ulasan berteks minimal 10 kata yang dianalisis, supaya "bagus" dan emoji tidak mengotori hasil
+
+### Riset massal
+- **Halaman pencarian** — tangkap sekaligus hingga 60 produk kompetitor dalam satu halaman,
+  otomatis diurutkan berdasarkan estimasi omset, lengkap dengan statistik rata-rata pasar
+- **Riwayat** — setiap produk yang di-scrape tersimpan di perangkat dan bisa dibuka lagi kapan saja
+
+### Antarmuka
+- **Panel melayang** di halaman Shopee — muncul otomatis, bisa digeser dan diminimize
+- **Popup extension** dengan tampilan lengkap
+- **Update otomatis terdeteksi** — lihat [bagian Update](#update)
 
 ## 📦 Instalasi
 
@@ -75,15 +99,87 @@ Unduh ulang [di sini](https://raw.githubusercontent.com/alawizv/shopeescraper/ma
 
 ## 🚀 Cara Pakai
 
-1. Buka halaman produk di **shopee.co.id**
+### A. Riset satu produk
+
+1. Buka halaman produk Shopee mana pun
    - Contoh: `https://shopee.co.id/nama-produk-i.123456.789012`
-2. Klik icon extension **Shopee Scraper** di toolbar Chrome
-3. Data produk akan otomatis tampil di popup
-4. Klik **"Ambil Review"** untuk mengambil review negatif (bintang 1–3)
-5. Gunakan tombol **Export** untuk mengunduh data:
-   - 📄 **JSON** — Download file .json
-   - 📊 **CSV** — Download file .csv (bisa dibuka di Excel)
-   - 📗 **Google Sheets** — Export langsung ke Google Spreadsheet
+2. **Panel melayang muncul sendiri** di pojok kanan bawah halaman.
+   Bisa juga klik ikon extension di toolbar untuk tampilan popup yang lebih lengkap.
+3. Data produk langsung terisi otomatis
+4. Atur **Filter Bintang Review** sesuai kebutuhan, lalu klik **🔄 Scrape Data**
+   untuk mengambil ulasan (bisa dihentikan kapan saja lewat tombol **🛑 Stop**)
+5. Klik **⚡ Muat Info Terjual & Toko** untuk melengkapi data terjual/bulan dan info toko
+
+### B. Riset massal dari halaman pencarian
+
+1. Cari kata kunci apa pun di Shopee, misalnya `kaos polos pria`
+2. **Scroll perlahan sampai bawah** supaya semua produk termuat
+3. Buka panel melayang → tampil tabel hingga 60 produk **urut dari omset tertinggi**,
+   beserta rata-rata harga, rating, dan terjual/bulan di kategori tersebut
+4. Klik **📋 Salin ke Sheets (TSV)** untuk langsung tempel ke spreadsheet,
+   atau **📥 Simpan ke Riwayat**
+
+### C. Riwayat
+
+Semua produk yang pernah di-scrape tersimpan otomatis di perangkat (IndexedDB, tidak dikirim
+ke mana pun). Dari bagian **Riwayat** di popup kamu bisa menyalin seluruhnya sebagai TSV,
+mengunduh CSV, atau menghapus semuanya.
+
+---
+
+## Cara Membaca Angkanya
+
+Bagian ini penting supaya tidak salah ambil keputusan.
+
+### Terjual / bulan
+
+Ada label sumber di sebelah angkanya:
+
+| Label | Artinya | Tingkat keyakinan |
+|---|---|---|
+| **PDP API** | Angka resmi dari API halaman produk | Paling akurat |
+| **Search API** | Angka dari hasil pencarian Shopee | Akurat |
+| **DOM Scraping** | Dibaca dari tampilan halaman | Cukup |
+| **(est)** | Diperkirakan dari jumlah ulasan | Kasar — perlakukan sebagai ancar-ancar |
+
+### Estimasi omset
+
+Ada dua angka, dihitung dengan cara berbeda supaya bisa saling dicek:
+
+- **Omset Quick** = terjual per bulan × harga rata-rata.
+  Cepat, tapi ikut meleset kalau angka terjual/bulan berlabel *(est)*.
+- **Omset 30 Hari (Detail)** = ulasan 30 hari terakhir × harga varian yang dibeli × faktor koreksi.
+  Faktor koreksi = total terjual ÷ total ulasan (karena tidak semua pembeli menulis ulasan).
+
+Kalau kedua angka berjauhan, artinya data produk itu memang kurang meyakinkan —
+jangan jadikan satu angka saja sebagai dasar keputusan.
+
+### Persentase penjualan varian
+
+Kalau Shopee membuka data penjualan per varian, yang dipakai adalah **angka asli**.
+Kalau tidak, persentasenya diperkirakan dari varian yang disebut di ulasan — berguna untuk
+melihat kecenderungan, tapi bukan angka pasti.
+
+### Cakupan sampel ulasan
+
+Bagian **Sampel Review** menampilkan berapa ulasan yang berhasil terbaca dibanding total ulasan.
+Semakin tinggi persentasenya, semakin bisa dipercaya analisis keluhan dan omset detailnya.
+
+---
+
+## 📤 Export Data
+
+| Tombol | Hasil | Perlu setup? |
+|---|---|---|
+| 📄 **JSON** | File `.json` berisi seluruh data mentah | Tidak |
+| 📊 **CSV** | File `.csv`, siap dibuka di Excel | Tidak |
+| 📋 **TSV** | Disalin ke clipboard — tinggal **Ctrl+V** ke Google Sheets atau Excel | Tidak |
+| 📗 **Google Sheets** | Langsung terkirim ke spreadsheet | Ya, lihat di bawah |
+
+> **Paling praktis: tombol TSV.** Baris pertamanya berupa *master tracking sheet* —
+> satu baris berisi tanggal, nama produk, toko, lokasi, status toko, harga, terjual/bulan,
+> estimasi omset, rating, jumlah ulasan, keluhan teratas, dan URL. Cocok untuk menumpuk
+> banyak produk dalam satu spreadsheet riset. Tanpa setup apa pun.
 
 ## 📗 Setup Google Sheets (Opsional)
 
@@ -118,40 +214,65 @@ Di `chrome://extensions/` → klik tombol reload (🔄) pada extension ini.
 
 | Masalah | Solusi |
 |---|---|
-| Data tidak muncul | Refresh halaman produk, lalu buka popup lagi |
-| "Bukan halaman produk" | Pastikan URL mengandung format `-i.shopid.itemid` |
-| Review kosong | Klik tombol "Ambil Review" |
-| Google Sheets error | Pastikan OAuth2 sudah di-setup dengan benar |
-| Extension tidak aktif | Pastikan sudah di-enable di `chrome://extensions/` |
+| Data tidak muncul | Refresh halaman produk, tunggu 3–5 detik sampai halaman termuat penuh |
+| "Bukan halaman produk" | Pastikan URL berformat `...-i.<shopid>.<itemid>` |
+| Panel melayang tidak muncul | Refresh halaman. Kalau tadi diminimize, panel muncul lagi saat pindah produk |
+| Ulasan kosong | Atur Filter Bintang lalu klik **Scrape Data**. Ulasan di bawah 10 kata memang sengaja dilewati |
+| Produk pencarian tidak terbaca | Scroll perlahan sampai bawah halaman pencarian dulu, baru buka panel |
+| Terjual/bulan kosong | Klik **⚡ Muat Info Terjual & Toko** |
+| Angka omset terasa aneh | Cek label sumber datanya — lihat [Cara Membaca Angkanya](#cara-membaca-angkanya) |
+| Google Sheets error | Pastikan OAuth2 sudah di-setup dan extension sudah di-reload |
+| Extension tidak aktif | Cek statusnya di `chrome://extensions/` |
 
 ## 📁 Struktur File
 
 ```
-shopee-scraper/
-├── manifest.json           # Konfigurasi extension MV3
+ShopeeScraperExtension/
+├── manifest.json              # Konfigurasi extension MV3
+├── version.json               # Versi terbaru + changelog (dibaca pengecek update)
+├── install-update.bat         # Pemasang & pembaru sekali klik
 ├── background/
-│   └── service-worker.js   # Background worker
+│   └── service-worker.js      # Background worker, OAuth Sheets, pengecek update
 ├── content/
-│   ├── injector.js         # Content script (bridge)
-│   └── interceptor.js      # Intercept API Shopee
+│   ├── injector.js            # Content script (jembatan) + fallback DOM scraping
+│   ├── interceptor.js         # Menyadap respons API Shopee
+│   └── panel.js               # Panel melayang di halaman (Shadow DOM)
 ├── popup/
-│   ├── popup.html          # UI popup
-│   ├── popup.js            # Logic popup
-│   └── popup.css           # Styling popup
+│   ├── popup.html             # Struktur UI popup
+│   ├── popup.js               # Logika popup
+│   └── popup.css              # Styling popup
 ├── utils/
-│   ├── parser.js           # Parser data mentah
-│   └── exporter.js         # Export JSON/CSV/Sheets
-└── icons/
-    ├── icon16.png
-    ├── icon48.png
-    └── icon128.png
+│   ├── parser.js              # Parser data mentah + analisis keluhan + hitung omset
+│   ├── db.js                  # Riwayat produk (IndexedDB)
+│   └── exporter.js            # Export JSON / CSV / TSV / Google Sheets
+├── icons/
+├── dev/                       # Berkas bantu pengembangan (tidak dipakai extension)
+└── .github/workflows/
+    └── auto-bump-version.yml  # Naikkan versi otomatis tiap push
 ```
+
+## 🌏 Negara yang Didukung
+
+`shopee.co.id` · `shopee.sg` · `shopee.com.my` · `shopee.ph` · `shopee.co.th` ·
+`shopee.vn` · `shopee.tw` · `shopee.com.br` · `shopee.com.mx` · `shopee.com.co` · `shopee.cl`
+
+Simbol mata uang menyesuaikan sendiri mengikuti domain yang sedang dibuka.
+
+## 🔒 Privasi
+
+Semua data disimpan **di perangkat kamu sendiri** (`chrome.storage` dan IndexedDB).
+Tidak ada data produk maupun data pribadi yang dikirim ke server mana pun.
+Satu-satunya koneksi keluar adalah:
+
+- **Shopee** — mengambil data produk yang sedang kamu buka
+- **raw.githubusercontent.com** — hanya membaca `version.json` untuk mengecek update
+- **Google Sheets** — hanya kalau kamu sendiri yang menekan tombol export-nya
 
 ## ⚠️ Disclaimer
 
 Extension ini dibuat untuk keperluan riset dan analisis kompetitor.
 Gunakan secara bertanggung jawab dan patuhi Terms of Service Shopee.
-Jangan melakukan scraping secara agresif (rate limit).
+Jangan melakukan scraping secara agresif.
 
 ## 📝 Lisensi
 

@@ -48,18 +48,29 @@ jobs:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
           python3 << 'PY'
-          import json, os
+          import json, os, re, sys
 
           new_version = os.environ['NEW_VERSION']
           changelog = os.environ.get('COMMIT_MSG', '').splitlines()[0].strip()
 
+          # manifest.json: ganti HANYA baris "version" lewat regex.
+          # json.dump akan memformat ulang seluruh berkas (array satu baris jadi
+          # mengembang), sehingga tiap bump menghasilkan diff yang penuh derau.
           with open('manifest.json', encoding='utf-8') as f:
-              manifest = json.load(f)
-          manifest['version'] = new_version
-          with open('manifest.json', 'w', encoding='utf-8') as f:
-              json.dump(manifest, f, indent=2, ensure_ascii=False)
-              f.write('\n')
+              raw = f.read()
 
+          patched, n = re.subn(
+              r'("version"\s*:\s*")[^"]*(")',
+              lambda m: m.group(1) + new_version + m.group(2),
+              raw, count=1)
+          if n != 1:
+              sys.exit('Gagal menemukan kolom "version" di manifest.json')
+
+          json.loads(patched)   # pastikan tetap JSON valid sebelum ditulis
+          with open('manifest.json', 'w', encoding='utf-8') as f:
+              f.write(patched)
+
+          # version.json memang dibuat ulang seluruhnya, jadi aman.
           with open('version.json', 'w', encoding='utf-8') as f:
               json.dump({'version': new_version, 'changelog': changelog},
                         f, indent=2, ensure_ascii=False)
