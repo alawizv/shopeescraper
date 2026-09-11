@@ -81,16 +81,32 @@ akan muncul:
 
 ### Cara memperbarui (2 langkah)
 
-**1. Klik dua kali `install-update.bat`** — file yang sama seperti waktu instalasi.
-File ini otomatis tahu bahwa extension sudah terpasang, jadi ia hanya mengunduh
-file-file yang baru. Tidak akan menghapus data hasil scraping.
+**1. Klik dua kali `install-update.bat` yang ada DI DALAM folder extension.**
+
+Script ini memperbarui folder tempat ia berada. Jadi selama file itu berada di
+folder extension yang sama dengan yang dimuat Chrome, folder itulah yang
+diperbarui — di mana pun kamu menaruhnya. Data hasil scraping tidak terhapus,
+dan Client ID Google (kalau sudah diisi) tetap dipertahankan.
 
 **2. Klik ikon extension di Chrome → klik tombol "Muat Ulang"** di dalam popup.
 
 Selesai. Versi baru langsung aktif tanpa perlu memasang ulang di `chrome://extensions`.
 
-> **Ingin cek update sekarang juga?** Klik tulisan versi (`v1.2.0`) di pojok kanan
+> **Ingin cek update sekarang juga?** Klik tulisan versi (`v1.2.2`) di pojok kanan
 > atas popup. Kalau sudah versi terbaru, akan berubah jadi **✓ Terbaru**.
+
+### Kalau versinya tidak berubah juga
+
+Hampir selalu penyebabnya sama: **Chrome memuat extension dari folder yang berbeda**
+dari folder yang diperbarui script.
+
+1. Buka `chrome://extensions`
+2. Lihat baris **"Loaded from"** pada kartu Shopee Product Scraper — itu folder
+   yang sebenarnya dipakai Chrome
+3. Pastikan `install-update.bat` berada di folder itu, lalu jalankan lagi
+
+Layar hasil update juga menampilkan folder mana yang barusan diperbarui, jadi
+kedua jalur itu bisa langsung dibandingkan.
 
 ### Kalau file `install-update.bat` hilang
 
