@@ -482,14 +482,22 @@ async function checkForUpdate() {
     chrome.action.setBadgeText({ text: 'NEW' });
     chrome.action.setBadgeBackgroundColor({ color: '#ee4d2d' });
 
-    // Notifikasi Chrome (muncul di pojok kanan bawah layar)
+    // Notifikasi Chrome (muncul di pojok kanan bawah layar).
+    // iconUrl WAJIB absolut: path relatif dihitung dari lokasi service worker
+    // (background/), bukan dari root extension, sehingga 'icons/icon128.png'
+    // dicari di background/icons/ dan gagal dengan
+    // "Unable to download all specified images".
     chrome.notifications.create('shopeeScraperUpdate', {
       type: 'basic',
-      iconUrl: 'icons/icon128.png',
+      iconUrl: chrome.runtime.getURL('icons/icon128.png'),
       title: '🛍️ Shopee Scraper — Update Tersedia!',
       message: `Versi ${remoteVersion} sudah tersedia (kamu: ${localVersion}).\n${changelog}`,
       buttons: [{ title: 'Cara Update' }],
       priority: 1
+    }).catch((e) => {
+      // Notifikasi gagal tidak boleh menggagalkan pengecekan update — badge
+      // "NEW" dan banner di popup tetap jalan tanpa ini.
+      console.warn('[Shopee Scraper] Notifikasi update gagal ditampilkan:', e?.message || e);
     });
 
     // Broadcast ke popup jika sedang terbuka
