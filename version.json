@@ -1,4 +1,4 @@
 {
-  "version": "1.2.0",
-  "changelog": "Perbaikan mata uang Rp (COL fix), penghentian review otomatis & instan stop, format master tracking TSV 1 baris, fallback estimasi ulasan 30 hari."
+  "version": "1.2.1",
+  "changelog": "Guard CSV/TSV export cells against formula injection"
 }
