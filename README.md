@@ -210,6 +210,10 @@ Semakin tinggi persentasenya, semakin bisa dipercaya analisis keluhan dan omset 
 
 Di `chrome://extensions/` → klik tombol reload (🔄) pada extension ini.
 
+> **Client ID kamu aman saat update.** `install-update.bat` membaca Client ID dari
+> `manifest.json` lama dan memasangnya kembali ke berkas yang baru, jadi kamu tidak
+> perlu mengisinya ulang setiap ada versi baru.
+
 ## 🔧 Troubleshooting
 
 | Masalah | Solusi |

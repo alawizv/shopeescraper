@@ -53,6 +53,14 @@ jobs:
           new_version = os.environ['NEW_VERSION']
           changelog = os.environ.get('COMMIT_MSG', '').splitlines()[0].strip()
 
+          # Changelog ini DITAMPILKAN ke user di notifikasi update dan banner
+          # popup. Pesan commit merge ("Merge branch 'main' of ...") tidak berarti
+          # apa-apa bagi mereka, jadi diganti kalimat netral.
+          if re.match(r'^Merge (branch|pull request|remote-tracking)\b', changelog, re.I):
+              changelog = 'Perbaikan dan penyempurnaan internal.'
+          elif not changelog:
+              changelog = 'Pembaruan versi.'
+
           # manifest.json: ganti HANYA baris "version" lewat regex.
           # json.dump akan memformat ulang seluruh berkas (array satu baris jadi
           # mengembang), sehingga tiap bump menghasilkan diff yang penuh derau.

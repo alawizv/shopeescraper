@@ -44,9 +44,20 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $ErrorActionPrefer
 if errorlevel 1 goto ERR_EXTRACT
 if not exist "%TMP_DIR%\shopeescraper-main\manifest.json" goto ERR_EXTRACT
 
+rem -- Simpan Client ID Google milik user sebelum manifest.json ditimpa --
+rem    (README menyuruh user mengisinya sendiri untuk export Google Sheets)
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $id = (Get-Content '%INSTALL_DIR%\manifest.json' -Raw | ConvertFrom-Json).oauth2.client_id; if ($id -and $id -notlike 'GANTI_DENGAN*') { Set-Content '%TMP_DIR%\clientid.txt' -Value $id -Encoding Ascii -NoNewline } } catch {}" 2>nul
+
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%" >nul 2>&1
 xcopy "%TMP_DIR%\shopeescraper-main\*" "%INSTALL_DIR%\" /E /I /Y /Q >nul
 if errorlevel 1 goto ERR_COPY
+
+rem -- Kembalikan Client ID Google milik user ke manifest.json yang baru --
+if exist "%TMP_DIR%\clientid.txt" (
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $id = (Get-Content '%TMP_DIR%\clientid.txt' -Raw).Trim(); $f = '%INSTALL_DIR%\manifest.json'; $t = (Get-Content $f -Raw).Replace('GANTI_DENGAN_CLIENT_ID_GOOGLE_ANDA.apps.googleusercontent.com', $id); [IO.File]::WriteAllText($f, $t, (New-Object Text.UTF8Encoding $false)) } catch {}" 2>nul
+    echo  Client ID Google milik kamu dipertahankan.
+    echo.
+)
 
 rd /s /q "%TMP_DIR%" >nul 2>&1
 
@@ -70,6 +81,15 @@ echo  Selesai! Extension langsung memakai versi terbaru.
 echo.
 echo  (Kalau tombol itu tidak ketemu: buka chrome://extensions
 echo   lalu klik ikon panah melingkar pada kartu Shopee Scraper)
+echo.
+echo  -----------------------------------------------
+echo  Folder yang diperbarui:
+echo  %INSTALL_DIR%
+echo.
+echo  Kalau versinya tidak berubah juga, kemungkinan Chrome
+echo  memuat extension dari folder LAIN. Cek di chrome://extensions
+echo  bagian "Loaded from" pada kartu Shopee Scraper.
+echo  -----------------------------------------------
 echo.
 pause
 exit /b 0
