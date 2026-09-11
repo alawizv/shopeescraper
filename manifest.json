@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Shopee Product Scraper",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Riset produk & kompetitor Shopee: varian, estimasi omset, analisis keluhan pembeli, dan riset massal halaman pencarian.",
   "permissions": [
     "activeTab",

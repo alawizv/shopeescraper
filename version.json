@@ -1,4 +1,4 @@
 {
-  "version": "1.2.1",
-  "changelog": "Guard CSV/TSV export cells against formula injection"
+  "version": "1.2.2",
+  "changelog": "Merge branch 'main' of https://github.com/alawizv/shopeescraper"
 }
