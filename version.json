@@ -1,4 +1,4 @@
 {
-  "version": "1.2.3",
-  "changelog": "Add audit findings document for v1.2.2"
+  "version": "1.2.4",
+  "changelog": "Fix bulk search: define shopId per item in processBulkSearchItems"
 }
