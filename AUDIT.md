@@ -14,7 +14,7 @@ Status: **belum ada yang diperbaiki** — dokumen ini murni catatan temuan.
 
 | # | Temuan | Berat | Status |
 |---|--------|-------|--------|
-| 1 | `shopId` tidak terdefinisi → Riset Massal mati total | 🔴 Kritis | ☐ |
+| 1 | `shopId` tidak terdefinisi → Riset Massal mati total | 🔴 Kritis | ☑ |
 | 2 | `panel.js` tidak bisa di-inject ulang + `db.js` hilang dari daftar inject | 🔴 Kritis | ☐ |
 | 3 | `formatRupiah` rusak untuk angka desimal | 🔴 Kritis | ☐ |
 | 4 | Sentimen & analisis keluhan dihitung dari sampel yang salah | 🟠 Logika | ☐ |

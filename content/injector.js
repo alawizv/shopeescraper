@@ -871,6 +871,7 @@
       rawItems.forEach(entry => {
         const item = entry?.item_basic || entry?.item || entry;
         const itemId = item?.itemid || item?.item_id;
+        const shopId = item?.shopid || item?.shop_id || null;
         if (!itemId || !item.name) return;
 
         const pmin = item.price_min !== undefined ? Math.round(item.price_min / 100000) : (item.price !== undefined ? Math.round(item.price / 100000) : 0);
