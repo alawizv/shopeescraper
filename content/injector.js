@@ -1575,6 +1575,11 @@
     
     // Batasi targetScraped persis ke total review Shopee agar tidak terus melompat tanpa batas
     const targetScraped = totalReviewsOfficial > 0 ? totalReviewsOfficial : Infinity;
+    // Shopee sering menyembunyikan sebagian kecil ulasan (dihapus/disembunyikan), jadi total resmi
+    // hampir tidak pernah tercapai 100%. Anggap selesai jika selisihnya dalam toleransi —
+    // jika tidak, scraper pindah ke tab filter (mis. "5 Bintang") dan tampak mengulang dari awal.
+    const targetTolerance = targetScraped !== Infinity ? Math.max(5, Math.ceil(targetScraped * 0.02)) : 0;
+    const isNearTarget = () => targetScraped !== Infinity && allReviews.length >= targetScraped - targetTolerance;
     console.log(`%c[Shopee Scraper V3] 🎯 Target cakupan: ${targetScraped !== Infinity ? targetScraped : 'Semua'} review. Saat ini: ${allReviews.length}`, 'background: teal; color: white;');
 
       if (allReviews.length < targetScraped && !window.CS_SHOPEE_STOP_FLAG) {
@@ -1769,6 +1774,10 @@
               }
             }
             
+            if (isNearTarget()) {
+              console.log(`%c[Shopee Scraper V3] 🎯 Cakupan ${allReviews.length}/${totalReviewsOfficial} sudah dalam toleransi. Tidak perlu pindah tab filter.`, 'background: green; color: white; font-weight: bold;');
+              break;
+            }
             currentFilterTabIndex++;
             
             if (filterBtns.length > 0 && currentFilterTabIndex < filterBtns.length) {
@@ -1872,6 +1881,10 @@
                   filterBtns = Array.from(fbs);
                   break;
                 }
+              }
+              if (isNearTarget()) {
+                console.log(`%c[Shopee Scraper V3] 🎯 Cakupan ${allReviews.length}/${totalReviewsOfficial} sudah dalam toleransi. Tidak perlu pindah tab filter.`, 'background: green; color: white; font-weight: bold;');
+                break;
               }
               currentFilterTabIndex++;
               if (filterBtns.length > 0 && currentFilterTabIndex < filterBtns.length) {
