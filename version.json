@@ -1,4 +1,4 @@
 {
-  "version": "1.2.4",
-  "changelog": "Fix bulk search: define shopId per item in processBulkSearchItems"
+  "version": "1.2.5",
+  "changelog": "Stop scraper from re-scraping via filter tabs when near total"
 }
