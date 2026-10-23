@@ -43,6 +43,12 @@
   let fallbackTimer = null;
   const FALLBACK_TIMEOUT = 8000; // 8 detik tunggu API, lalu fallback
 
+  // Jeda dengan variasi acak. Ritme request yang persis sama tiap putaran adalah pola mesin
+  // yang mudah ditandai anti-bot Shopee (redirect ke /verify/traffic/error).
+  function jitter(baseMs, spread = 0.6) {
+    return Math.round(baseMs * (1 - spread / 2 + Math.random() * spread));
+  }
+
   // Helper deduplikasi ulasan universal (anti double-read/double-count)
   function getReviewDedupeKey(r) {
     if (!r) return '';
@@ -1420,7 +1426,12 @@
         });
 
         if (!response.ok) {
-          if (response.status === 429 || response.status === 403) {
+          // 403 = sudah ditandai bot oleh Shopee: berhenti total, mengulang hanya memperdalam blokir
+          if (response.status === 403) {
+            console.warn('[Shopee Scraper] ⛔ Auto-fetch: HTTP 403, menghentikan.');
+            break;
+          }
+          if (response.status === 429) {
             retryCount++;
             const waitTime = Math.min(3000 * retryCount, 15000);
             console.warn(`[Shopee Scraper] ⚠️ Auto-fetch HTTP ${response.status}. Retry ${retryCount}/${maxRetries}`);
@@ -1461,7 +1472,7 @@
         }
 
         if (ratings.length < limit) break;
-        await new Promise(r => setTimeout(r, 800)); // Rate limit
+        await new Promise(r => setTimeout(r, jitter(1500))); // Rate limit
       }
     } catch (e) {
       console.warn('[Shopee Scraper] Auto-fetch error:', e.message);
@@ -1592,6 +1603,7 @@
       const MAX_EMPTY_STREAK = 5;    // menyerah setelah 5 klik beruntun tanpa data baru
       let lastProgressSave = 0;
       let currentFilterTabIndex = 0; // Mulai dari tab "Semua" (index 0)
+      let needFullClick = false;     // true setelah klik biasa terbukti tidak memicu request next-page
         
         try {
           // Scroll ke bagian review
@@ -1616,8 +1628,9 @@
         while (paginationRounds < MAX_PAGINATION_ROUNDS && paginationAttempts < MAX_PAGINATION_ATTEMPTS) {
           paginationAttempts++; // selalu naik — mencegah loop tak berujung saat klik berhasil tapi tidak ada data
           let clicked = false;
+          let pagedByNextBtn = false; // true jika putaran ini mengklik tombol next (bukan pindah tab filter)
           let targetBtn = null;
-          
+
           // Retry mencari tombol Next yang aktif (maks 10x per 400ms = 4 detik)
           // Ini penting karena DOM React butuh waktu update setelah interceptor selesai
           for (let attempt = 0; attempt < 10; attempt++) {
@@ -1731,28 +1744,36 @@
           
           if (targetBtn) {
             targetBtn.scrollIntoView({ block: 'center' });
-            await new Promise(r => setTimeout(r, 200)); // Sedikit jeda agar stabil untuk diklik
-            
-            // Trick klik 1: Eksekusi click di anak pertamanya (misal svg), karena event binding React kadang spesifik
-            const firstChild = targetBtn.firstElementChild;
-            if (firstChild) {
-              try { firstChild.click(); } catch (e) {}
+            await new Promise(r => setTimeout(r, jitter(250))); // Sedikit jeda agar stabil untuk diklik
+
+            if (!needFullClick) {
+              // Default: satu klik per halaman. Beberapa klik beruntun pada tombol yang sama memicu
+              // beberapa request next-page dalam hitungan milidetik — pola yang jelas bukan manusia.
+              try { targetBtn.click(); } catch(e) {}
+            } else {
+              // Dipakai hanya setelah klik biasa terbukti tidak memicu request (binding React rewel).
+              // Trick klik 1: Eksekusi click di anak pertamanya (misal svg)
+              const firstChild = targetBtn.firstElementChild;
+              if (firstChild) {
+                try { firstChild.click(); } catch (e) {}
+              }
+
+              // Trick klik 2: Native Element Clicks
+              try { targetBtn.click(); } catch(e) {}
+
+              // Trick klik 3: Dispatch native events (jurus terakhir untuk React bypass)
+              const eventOpts = { bubbles: true, cancelable: true, view: window };
+              targetBtn.dispatchEvent(new MouseEvent('pointerdown', eventOpts));
+              targetBtn.dispatchEvent(new MouseEvent('mousedown', eventOpts));
+              targetBtn.dispatchEvent(new MouseEvent('pointerup', eventOpts));
+              targetBtn.dispatchEvent(new MouseEvent('mouseup', eventOpts));
+              targetBtn.dispatchEvent(new MouseEvent('click', eventOpts));
             }
-            
-            // Trick klik 2: Native Element Clicks
-            try { targetBtn.click(); } catch(e) {}
-            
-            // Trick klik 3: Dispatch native events (jurus terakhir untuk React bypass)
-            const eventOpts = { bubbles: true, cancelable: true, view: window };
-            targetBtn.dispatchEvent(new MouseEvent('pointerdown', eventOpts));
-            targetBtn.dispatchEvent(new MouseEvent('mousedown', eventOpts));
-            targetBtn.dispatchEvent(new MouseEvent('pointerup', eventOpts));
-            targetBtn.dispatchEvent(new MouseEvent('mouseup', eventOpts));
-            targetBtn.dispatchEvent(new MouseEvent('click', eventOpts));
-            
+
             clicked = true;
+            pagedByNextBtn = true;
             console.log(`[Shopee Scraper V3] 🖱️ Klik next page (round ${paginationRounds + 1}) pada elemen:`, targetBtn);
-            await new Promise(r => setTimeout(r, 500)); // Beri waktu DOM mengirim request API
+            await new Promise(r => setTimeout(r, jitter(500))); // Beri waktu DOM mengirim request API
           }
           
           if (!clicked) {
@@ -1863,6 +1884,10 @@
           } else {
             // Klik berhasil tapi tidak ada review baru — jangan berputar selamanya
             emptyStreak++;
+            if (pagedByNextBtn && !needFullClick) {
+              needFullClick = true;
+              console.log('[Shopee Scraper V3] Klik tunggal tidak memicu data baru, beralih ke klik penuh.');
+            }
             console.log(`[Shopee Scraper V3] ⏳ Tidak ada review baru setelah klik (${emptyStreak}/${MAX_EMPTY_STREAK}).`);
             if (emptyStreak >= MAX_EMPTY_STREAK) {
               console.log(`%c[Shopee Scraper V3] 🏁 ${MAX_EMPTY_STREAK}× klik beruntun tanpa data baru di tab ini. Mencoba pindah tab filter review...`, 'background: orange; color: black;');
@@ -1916,6 +1941,13 @@
             console.log(`[Shopee Scraper V3] ⚠️ Mencapai batas ${MAX_PAGINATION_ATTEMPTS} percobaan klik.`);
             break;
           }
+
+          // Jeda antar halaman + istirahat panjang berkala, meniru orang yang membaca ulasan
+          if (captured > 0 && paginationRounds % 25 === 0) {
+            await interruptibleSleep(jitter(6000));
+          } else {
+            await interruptibleSleep(jitter(700));
+          }
         }
       } catch (e) {
         console.warn('[Shopee Scraper V3] Pagination simulation error:', e);
@@ -1952,7 +1984,12 @@
           });
 
           if (!response.ok) {
-            if (response.status === 429 || response.status === 403) {
+            // 403 = sudah ditandai bot oleh Shopee: berhenti total, mengulang hanya memperdalam blokir
+            if (response.status === 403) {
+              console.warn('[Shopee Scraper V3] ⛔ HTTP 403, API diblokir. Menghentikan direct API.');
+              break;
+            }
+            if (response.status === 429) {
               retryCount++;
               const waitTime = Math.min(3000 * retryCount, 15000);
               console.warn(`[Shopee Scraper V3] ⚠️ HTTP ${response.status}. Retry ${retryCount}/${maxRetries}, tunggu ${waitTime/1000}s...`);
@@ -1986,7 +2023,7 @@
           }
 
           if (ratings.length < limit) break;
-          await new Promise(r => setTimeout(r, 800));
+          await new Promise(r => setTimeout(r, jitter(1500)));
         }
       } catch (e) {
         console.warn('[Shopee Scraper V3] ⛔ Direct API error:', e.message);
