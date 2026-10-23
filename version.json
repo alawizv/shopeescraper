@@ -1,4 +1,4 @@
 {
-  "version": "1.2.6",
-  "changelog": "Add jitter and single-click paging to avoid Shopee anti-bot flags"
+  "version": "1.2.7",
+  "changelog": "Perbaikan dan penyempurnaan internal."
 }
