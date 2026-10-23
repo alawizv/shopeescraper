@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Update Shopee Scraper</title>
+  <link rel="stylesheet" href="update.css">
+</head>
+<body>
+  <main class="card">
+    <header class="card-header">
+      <h1>🛍️ Update Shopee Scraper</h1>
+    </header>
+
+    <div class="card-body">
+      <section class="versions">
+        <div>
+          <span class="label">Terpasang</span>
+          <b id="ver-now">-</b>
+        </div>
+        <div>
+          <span class="label">Terbaru</span>
+          <b id="ver-new">-</b>
+        </div>
+      </section>
+      <p id="changelog" class="changelog"></p>
+
+      <section class="folder">
+        <span class="label">Folder extension</span>
+        <div id="folder-name" class="folder-name">Belum dipilih</div>
+        <p id="folder-help" class="hint">
+          Pilih <b>sekali saja</b> folder tempat extension ini dipasang, yaitu folder yang sama dengan
+          baris <b>Source</b> / <b>Loaded from</b> di halaman detail extension. Update berikutnya tinggal 1 klik.
+        </p>
+        <div class="row">
+          <button id="btn-show-path" class="link" type="button">Lihat lokasi folder di Chrome</button>
+          <button id="btn-change-folder" class="link d-none" type="button">Ganti folder</button>
+        </div>
+      </section>
+
+      <button id="btn-update" class="primary" type="button">📂 Pilih folder &amp; update</button>
+
+      <div id="progress" class="progress d-none"><div id="progress-bar" class="progress-bar"></div></div>
+      <p id="status" class="status" role="status"></p>
+
+      <button id="btn-reload" class="primary d-none" type="button">🔄 Muat Ulang Extension</button>
+    </div>
+
+    <footer class="card-footer">
+      Tidak berhasil? Pakai cara lama lewat
+      <a href="https://github.com/alawizv/shopeescraper#update" target="_blank" rel="noopener">install-update.bat</a>.
+    </footer>
+  </main>
+
+  <script src="../utils/zip-reader.js"></script>
+  <script src="../utils/updater.js"></script>
+  <script src="update.js"></script>
+</body>
+</html>

@@ -79,7 +79,24 @@ akan muncul:
 - Tulisan **NEW** berwarna merah di ikon extension
 - Banner hijau di dalam popup extension
 
-### Cara memperbarui (2 langkah)
+### Cara memperbarui dari dalam extension (tanpa cari folder)
+
+1. Klik **⬇️ Update Sekarang** — di banner popup, di panel melayang, atau di tombol
+   notifikasi Windows. Sebuah tab update akan terbuka.
+2. **Pertama kali saja:** pilih folder tempat extension dipasang. Kalau lupa lokasinya,
+   klik **Lihat lokasi folder di Chrome** dan lihat baris **Source**. Pilihan ini diingat,
+   jadi update berikutnya tidak perlu memilih folder lagi.
+3. Klik **Update sekarang**, tunggu sampai muncul tanda ✅, lalu klik **🔄 Muat Ulang
+   Extension** dan refresh tab Shopee yang sedang terbuka.
+
+Data hasil scraping tidak terhapus, dan Client ID Google (kalau sudah diisi) tetap
+dipertahankan. Chrome kadang meminta izin menulis ke folder itu lagi setelah browser
+dibuka ulang — pilih **Izinkan**.
+
+> Cara ini baru tersedia mulai versi yang memuat halaman update. Dari versi
+> sebelumnya, pakai cara lama di bawah satu kali.
+
+### Cara lama: lewat `install-update.bat` (2 langkah)
 
 **1. Klik dua kali `install-update.bat` yang ada DI DALAM folder extension.**
 
@@ -261,10 +278,16 @@ ShopeeScraperExtension/
 │   ├── popup.html             # Struktur UI popup
 │   ├── popup.js               # Logika popup
 │   └── popup.css              # Styling popup
+├── update/
+│   ├── update.html            # Halaman update dari dalam extension
+│   ├── update.js              # Pilih folder, tombol update, muat ulang
+│   └── update.css             # Styling halaman update
 ├── utils/
 │   ├── parser.js              # Parser data mentah + analisis keluhan + hitung omset
 │   ├── db.js                  # Riwayat produk (IndexedDB)
-│   └── exporter.js            # Export JSON / CSV / TSV / Google Sheets
+│   ├── exporter.js            # Export JSON / CSV / TSV / Google Sheets
+│   ├── updater.js             # Unduh ZIP dari GitHub + tulis ke folder extension
+│   └── zip-reader.js          # Pembaca ZIP minimal untuk updater
 ├── icons/
 ├── dev/                       # Berkas bantu pengembangan (tidak dipakai extension)
 └── .github/workflows/

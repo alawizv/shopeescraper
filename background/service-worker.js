@@ -142,6 +142,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }, 200);
     return true;
   }
+
+  // ── Buka halaman update (content script tidak boleh membuka tab ekstensi sendiri) ──
+  if (message.action === 'OPEN_UPDATE_PAGE') {
+    chrome.tabs.create({ url: chrome.runtime.getURL('update/update.html') });
+    sendResponse({ ok: true });
+    return true;
+  }
 });
 
 /**
@@ -492,7 +499,7 @@ async function checkForUpdate() {
       iconUrl: chrome.runtime.getURL('icons/icon128.png'),
       title: '🛍️ Shopee Scraper — Update Tersedia!',
       message: `Versi ${remoteVersion} sudah tersedia (kamu: ${localVersion}).\n${changelog}`,
-      buttons: [{ title: 'Cara Update' }],
+      buttons: [{ title: 'Update Sekarang' }],
       priority: 1
     }).catch((e) => {
       // Notifikasi gagal tidak boleh menggagalkan pengecekan update — badge
@@ -511,10 +518,10 @@ async function checkForUpdate() {
   }
 }
 
-// Klik tombol "Cara Update" di notifikasi → buka halaman release GitHub
+// Klik tombol "Update Sekarang" di notifikasi → buka halaman update di dalam extension
 chrome.notifications.onButtonClicked.addListener((notifId, btnIdx) => {
   if (notifId === 'shopeeScraperUpdate' && btnIdx === 0) {
-    chrome.tabs.create({ url: 'https://github.com/alawizv/shopeescraper#update' });
+    chrome.tabs.create({ url: chrome.runtime.getURL('update/update.html') });
   }
 });
 

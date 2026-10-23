@@ -753,7 +753,7 @@ function createPanel() {
         </div>
         <div id="panelUpdateChangelog" style="font-size:10px; color:#666; margin-top:3px;"></div>
         <div style="margin-top:4px;">
-          <a href="https://github.com/alawizv/shopeescraper#update" target="_blank" style="color:#ee4d2d; font-weight:700; text-decoration:none; font-size:10.5px;">Cara Update →</a>
+          <a id="btnPanelUpdateNow" href="#" style="color:#ee4d2d; font-weight:700; text-decoration:none; font-size:10.5px;">⬇️ Update Sekarang →</a>
         </div>
       </div>
 
@@ -1782,7 +1782,15 @@ async function mountPanel() {
   const changelogEl = shadow.getElementById('panelUpdateChangelog');
   const btnReloadExt = shadow.getElementById('btnPanelReloadExt');
   const btnHeaderReload = shadow.getElementById('btnHeaderReload');
+  const btnUpdateNow = shadow.getElementById('btnPanelUpdateNow');
   const verBadge = shadow.getElementById('panelVersion');
+
+  if (btnUpdateNow) {
+    btnUpdateNow.addEventListener('click', (e) => {
+      e.preventDefault();
+      try { chrome.runtime.sendMessage({ action: 'OPEN_UPDATE_PAGE' }); } catch (err) { /* extension context invalidated */ }
+    });
+  }
 
   function renderPanelUpdate(info) {
     if (!updateBanner) return;

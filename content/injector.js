@@ -1601,6 +1601,7 @@
       const MAX_PAGINATION_ROUNDS = 3000; // Maks 3000 halaman klik (sekitar 18000 review)
       const MAX_PAGINATION_ATTEMPTS = MAX_PAGINATION_ROUNDS + 50;
       const MAX_EMPTY_STREAK = 5;    // menyerah setelah 5 klik beruntun tanpa data baru
+      const PAGE_PAUSE_MS = 250;     // jeda antar halaman; naikkan jika Shopee mulai memblokir, turunkan jika terlalu lambat
       let lastProgressSave = 0;
       let currentFilterTabIndex = 0; // Mulai dari tab "Semua" (index 0)
       let needFullClick = false;     // true setelah klik biasa terbukti tidak memicu request next-page
@@ -1744,7 +1745,7 @@
           
           if (targetBtn) {
             targetBtn.scrollIntoView({ block: 'center' });
-            await new Promise(r => setTimeout(r, jitter(250))); // Sedikit jeda agar stabil untuk diklik
+            await new Promise(r => setTimeout(r, jitter(150))); // Sedikit jeda agar stabil untuk diklik
 
             if (!needFullClick) {
               // Default: satu klik per halaman. Beberapa klik beruntun pada tombol yang sama memicu
@@ -1773,7 +1774,7 @@
             clicked = true;
             pagedByNextBtn = true;
             console.log(`[Shopee Scraper V3] 🖱️ Klik next page (round ${paginationRounds + 1}) pada elemen:`, targetBtn);
-            await new Promise(r => setTimeout(r, jitter(500))); // Beri waktu DOM mengirim request API
+            await new Promise(r => setTimeout(r, jitter(200))); // Beri waktu DOM mengirim request API
           }
           
           if (!clicked) {
@@ -1942,11 +1943,11 @@
             break;
           }
 
-          // Jeda antar halaman + istirahat panjang berkala, meniru orang yang membaca ulasan
-          if (captured > 0 && paginationRounds % 25 === 0) {
-            await interruptibleSleep(jitter(6000));
+          // Jeda singkat antar halaman + istirahat berkala, agar ritmenya tidak seperti mesin
+          if (captured > 0 && paginationRounds % 40 === 0) {
+            await interruptibleSleep(jitter(4000));
           } else {
-            await interruptibleSleep(jitter(700));
+            await interruptibleSleep(jitter(PAGE_PAUSE_MS));
           }
         }
       } catch (e) {
