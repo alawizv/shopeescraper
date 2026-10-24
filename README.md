@@ -258,6 +258,7 @@ Di `chrome://extensions/` → klik tombol reload (🔄) pada extension ini.
 | Produk pencarian tidak terbaca | Scroll perlahan sampai bawah halaman pencarian dulu, baru buka panel |
 | Terjual/bulan kosong | Klik **⚡ Muat Info Terjual & Toko** |
 | Angka omset terasa aneh | Cek label sumber datanya — lihat [Cara Membaca Angkanya](#cara-membaca-angkanya) |
+| Banner merah "Scraping dijeda sampai HH:MM" | Shopee menolak permintaan (HTTP 403/429, error 90309999) atau mengalihkan ke halaman verifikasi. Extension berhenti total selama 30 menit supaya blokirnya tidak makin dalam. Buka Shopee secara manual, selesaikan verifikasi kalau diminta, lalu tunggu jedanya habis. **Hapus peringatan** hanya kalau Anda yakin Shopee sudah normal lagi |
 | Google Sheets error | Pastikan OAuth2 sudah di-setup dan extension sudah di-reload |
 | Extension tidak aktif | Cek statusnya di `chrome://extensions/` |
 
@@ -284,11 +285,14 @@ ShopeeScraperExtension/
 │   └── update.css             # Styling halaman update
 ├── utils/
 │   ├── parser.js              # Parser data mentah + analisis keluhan + hitung omset
+│   ├── format.js              # Format angka/uang dan escape HTML (dipakai panel & popup)
+│   ├── antibot.js             # Mengenali blokir Shopee + catatan jeda (cooldown)
 │   ├── db.js                  # Riwayat produk (IndexedDB)
 │   ├── exporter.js            # Export JSON / CSV / TSV / Google Sheets
 │   ├── updater.js             # Unduh ZIP dari GitHub + tulis ke folder extension
 │   └── zip-reader.js          # Pembaca ZIP minimal untuk updater
 ├── icons/
+├── tests/                     # Tes otomatis — jalankan `node --test` di folder ini (tanpa dependensi)
 ├── dev/                       # Berkas bantu pengembangan (tidak dipakai extension)
 └── .github/workflows/
     └── auto-bump-version.yml  # Naikkan versi otomatis tiap push

@@ -362,6 +362,12 @@ Auto-klik pagination sampai `MAX_PAGINATION_ROUNDS = 3000` halaman plus fetch AP
 Retry untuk 429/403 sudah ada dan bagus, tapi pertimbangkan menaikkan jeda dasar dan
 menghormati header `Retry-After` agar akun Shopee user tidak kena rate-limit.
 
+> **Update 2026-10-24:** retry untuk 403/429 justru dihapus. Mengulang request setelah
+> sesi ditandai bot hanya memperdalam blokir. Sekarang HTTP 403/429, error 90309999, dan
+> halaman `/verify/` menghentikan semua scraping dan memberlakukan jeda 30 menit (lihat
+> `utils/antibot.js`). `Retry-After` tidak dipakai karena Shopee menolak lewat redirect
+> dan body error, bukan header itu. Efektivitasnya terhadap Shopee asli belum terbukti.
+
 ### 17. Catatan kecil lain
 - `utils/db.js:228` — `saveBulkProducts` memakai `id: String(p.itemid)` tanpa penjaga; kalau
   `itemid` undefined semua record bertabrakan di kunci `"undefined"`. Saat ini tidak terpicu
