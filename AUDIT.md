@@ -6,7 +6,8 @@ Cakupan: seluruh sumber (~8.400 baris) — `manifest.json`, `background/service-
 `content/{interceptor,injector,panel}.js`, `popup/popup.js`, `utils/{parser,exporter,db}.js`,
 `.github/workflows/auto-bump-version.yml`, `install-update.bat`.
 
-Status: **belum ada yang diperbaiki** — dokumen ini murni catatan temuan.
+Status: temuan #1, #2, #3, #4, #5, dan #7 sudah diperbaiki (tanda ☑ di tabel, masing-masing
+dengan tes di `tests/`, jalankan `node --test`). #6, #8, #9 dan saran #10+ belum dikerjakan.
 
 ---
 
@@ -15,12 +16,12 @@ Status: **belum ada yang diperbaiki** — dokumen ini murni catatan temuan.
 | # | Temuan | Berat | Status |
 |---|--------|-------|--------|
 | 1 | `shopId` tidak terdefinisi → Riset Massal mati total | 🔴 Kritis | ☑ |
-| 2 | `panel.js` tidak bisa di-inject ulang + `db.js` hilang dari daftar inject | 🔴 Kritis | ☐ |
-| 3 | `formatRupiah` rusak untuk angka desimal | 🔴 Kritis | ☐ |
-| 4 | Sentimen & analisis keluhan dihitung dari sampel yang salah | 🟠 Logika | ☐ |
-| 5 | `escapeHTML()` tidak meng-escape tanda kutip | 🟠 Logika | ☐ |
+| 2 | `panel.js` tidak bisa di-inject ulang + `db.js` hilang dari daftar inject | 🔴 Kritis | ☑ |
+| 3 | `formatRupiah` rusak untuk angka desimal | 🔴 Kritis | ☑ |
+| 4 | Sentimen & analisis keluhan dihitung dari sampel yang salah | 🟠 Logika | ☑ |
+| 5 | `escapeHTML()` tidak meng-escape tanda kutip | 🟠 Logika | ☑ |
 | 6 | Service worker bisa menggantung pemanggilnya | 🟠 Logika | ☐ |
-| 7 | Tanggal memakai UTC, bukan waktu lokal | 🟠 Logika | ☐ |
+| 7 | Tanggal memakai UTC, bukan waktu lokal | 🟠 Logika | ☑ |
 | 8 | Re-parse O(n²) saat scraping review | 🟡 Performa | ☐ |
 | 9 | Race pada injeksi interceptor | 🟡 Performa | ☐ |
 | 10+ | Kualitas kode & saran (lihat bagian bawah) | 🔵 Saran | ☐ |
