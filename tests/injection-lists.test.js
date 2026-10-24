@@ -37,6 +37,15 @@ test('popup.html memuat semua skrip utils manifest sebelum popup.js', () => {
   }
 });
 
+test('antibot.js dimuat sebelum injector.js (manifest dan re-inject popup)', () => {
+  const manifestOrder = manifestContentScripts();
+  assert.ok(manifestOrder.indexOf('utils/antibot.js') >= 0, 'antibot.js harus ada di manifest');
+  assert.ok(manifestOrder.indexOf('utils/antibot.js') < manifestOrder.indexOf('content/injector.js'));
+
+  const reinject = popupReinjectFiles();
+  assert.ok(reinject.indexOf('utils/antibot.js') < reinject.indexOf('content/injector.js'));
+});
+
 test('re-inject popup memuat dependensi sebelum panel.js', () => {
   const files = popupReinjectFiles();
   const panelAt = files.indexOf('content/panel.js');

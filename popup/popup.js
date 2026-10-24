@@ -123,7 +123,7 @@
       try {
         await chrome.scripting.executeScript({
           target: { tabId: tab.id },
-          files: ['utils/db.js', 'utils/format.js', 'utils/parser.js', 'content/injector.js', 'content/panel.js']
+          files: ['utils/db.js', 'utils/format.js', 'utils/antibot.js', 'utils/parser.js', 'content/injector.js', 'content/panel.js']
         });
         showLoading('Menyambung ulang...');
         

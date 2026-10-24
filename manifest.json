@@ -45,7 +45,7 @@
         "https://*.shopee.com.co/*",
         "https://*.shopee.cl/*"
       ],
-      "js": ["content/injector.js"],
+      "js": ["utils/antibot.js", "content/injector.js"],
       "run_at": "document_start"
     },
     {
