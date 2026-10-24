@@ -311,6 +311,7 @@ var ShopeeParser = (typeof ShopeeParser !== 'undefined' && ShopeeParser) ? Shope
     let totalReviewsParsed = 0;   // semua ulasan unik yang diproses (untuk statistik sampel)
     let variantReviewTotal = 0;   // ulasan yang membawa info varian (penyebut persentase proxy)
     const reviewVariantsCount = {}; // V1 Logic Proxy Tracker
+    const starCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }; // jumlah ulasan unik per bintang
 
     // Tracking untuk kalkulasi omset 30 hari
     let reviews30dCount = 0;
@@ -348,6 +349,11 @@ var ShopeeParser = (typeof ShopeeParser !== 'undefined' && ShopeeParser) ? Shope
         totalReviewsParsed++;
 
         const stars = review.rating_star || review.star || review.rating || 0;
+
+        // Distribusi bintang dari SEMUA ulasan unik, sebelum filter bintang/kata dipakai.
+        // Sentimen harus dihitung dari sini; ulasan terfilter hanya cocok untuk pain point.
+        const starBucket = Math.round(Number(stars));
+        if (starBucket >= 1 && starBucket <= 5) starCounts[starBucket]++;
 
         // Tahap 2: Menggali Informasi Varian dari Komentar (product_items[0].model_name)
         const productItems = review.product_items || [];
@@ -528,6 +534,7 @@ var ShopeeParser = (typeof ShopeeParser !== 'undefined' && ShopeeParser) ? Shope
     return {
       reviews: allReviews, // Kembalikan SEMUA review yang lolos filter (tanpa batas 50)
       totalReviewsParsed: totalReviewsParsed,   // semua ulasan unik yang diproses
+      starCounts: starCounts,                   // distribusi bintang semua ulasan unik (belum difilter)
       variantReviewTotal: variantReviewTotal,   // ulasan yang membawa info varian
       tierSummaries: tierSummaries,
       reviewVariantsCount: reviewVariantsCount,
@@ -587,11 +594,11 @@ var ShopeeParser = (typeof ShopeeParser !== 'undefined' && ShopeeParser) ? Shope
    * Ekstrak insight ulasan pembeli (Pain Points & Analisis Keluhan)
    * Mengelompokkan keluhan utama pembeli ke dalam kategori spesifik dan kata kunci teratas.
    */
-  extractReviewInsights(reviews) {
+  extractReviewInsights(reviews, starCounts = null) {
     if (!reviews || !Array.isArray(reviews) || reviews.length === 0) {
       return {
         total_analyzed: 0,
-        sentiment: { positive_count: 0, negative_count: 0, positive_rate: 100 },
+        sentiment: this._buildSentiment([], starCounts),
         pain_points: [],
         top_complaint_words: []
       };
@@ -658,14 +665,10 @@ var ShopeeParser = (typeof ShopeeParser !== 'undefined' && ShopeeParser) ? Shope
       'produk', 'shopee', 'seller', 'toko', 'terima', 'kasih', 'bagus'
     ]);
 
-    let positiveCount = 0;
-    let negativeCount = 0;
     const wordFreq = {};
 
     reviews.forEach(r => {
       const stars = Number(r.stars) || 5;
-      if (stars >= 4) positiveCount++;
-      else negativeCount++;
 
       const comment = (r.comment || '').toLowerCase();
       if (!comment) return;
@@ -712,17 +715,48 @@ var ShopeeParser = (typeof ShopeeParser !== 'undefined' && ShopeeParser) ? Shope
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
 
-    const positiveRate = totalAnalyzed > 0 ? Math.round((positiveCount / totalAnalyzed) * 100) : 100;
-
     return {
       total_analyzed: totalAnalyzed,
-      sentiment: {
-        positive_count: positiveCount,
-        negative_count: negativeCount,
-        positive_rate: positiveRate
-      },
+      sentiment: this._buildSentiment(reviews, starCounts),
       pain_points: activePainPoints,
       top_complaint_words: topWords
+    };
+  },
+
+  /**
+   * Sentimen pembeli (>=4 bintang = positif).
+   * Sumber utama: distribusi bintang SEMUA ulasan unik (starCounts). Ulasan terfilter
+   * sudah dibatasi bintang pilihan user dan minimal 10 kata, jadi dengan filter "1★ saja"
+   * persen positifnya pasti 0% dan tidak mewakili produk. Ulasan terfilter hanya dipakai
+   * kalau starCounts tidak tersedia (mis. data tersimpan lama).
+   * positive_rate = null berarti tidak ada data, bukan 100%.
+   */
+  _buildSentiment(filteredReviews, starCounts) {
+    let positive = 0;
+    let negative = 0;
+    let basis = 'filtered_reviews';
+
+    const counted = starCounts
+      ? [1, 2, 3, 4, 5].reduce((sum, s) => sum + (starCounts[s] || 0), 0)
+      : 0;
+
+    if (counted > 0) {
+      positive = (starCounts[4] || 0) + (starCounts[5] || 0);
+      negative = (starCounts[1] || 0) + (starCounts[2] || 0) + (starCounts[3] || 0);
+      basis = 'all_reviews';
+    } else {
+      (filteredReviews || []).forEach(r => {
+        if ((Number(r.stars) || 5) >= 4) positive++;
+        else negative++;
+      });
+    }
+
+    const total = positive + negative;
+    return {
+      positive_count: positive,
+      negative_count: negative,
+      positive_rate: total > 0 ? Math.round((positive / total) * 100) : null,
+      basis: basis
     };
   },
 
@@ -883,7 +917,7 @@ var ShopeeParser = (typeof ShopeeParser !== 'undefined' && ShopeeParser) ? Shope
       filtered_reviews: negativeReviews || [], // Nama lebih netral (bukan hanya 'negatif')
       negative_reviews: negativeReviews || [], // Tetap ada untuk backward compatibility
       currency_symbol: this.getCurrencySymbol(url),
-      review_insights: this.extractReviewInsights(negativeReviews)
+      review_insights: this.extractReviewInsights(negativeReviews, parseReviewResult?.starCounts)
     };
   }
 };
