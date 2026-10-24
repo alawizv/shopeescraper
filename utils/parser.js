@@ -436,7 +436,7 @@ var ShopeeParser = (typeof ShopeeParser !== 'undefined' && ShopeeParser) ? Shope
 
         const timestamp = review.ctime || review.create_time || review.mtime || 0;
         const date = timestamp
-          ? new Date(timestamp * 1000).toISOString().split('T')[0]
+          ? this.toLocalDateString(new Date(timestamp * 1000))
           : 'Tidak diketahui';
 
         allReviews.push({
@@ -546,6 +546,18 @@ var ShopeeParser = (typeof ShopeeParser !== 'undefined' && ShopeeParser) ? Shope
         avg_price_from_reviews: reviews30dWithPrice > 0 ? Math.round(omset30dFromReviews / reviews30dWithPrice) : 0
       }
     };
+  },
+
+  /**
+   * Tanggal YYYY-MM-DD menurut zona waktu lokal (bukan UTC).
+   * toISOString() memakai UTC, sehingga ulasan atau scrape pukul 00:00-06:59 WIB
+   * tercatat sehari lebih awal. Tanpa argumen = hari ini; nilai tak valid = ''.
+   */
+  toLocalDateString(value) {
+    const d = value instanceof Date ? value : new Date(value ?? Date.now());
+    if (Number.isNaN(d.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   },
 
   /**

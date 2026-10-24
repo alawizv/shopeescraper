@@ -206,7 +206,7 @@ function buildTSV(output) {
   ].join(T) + N;
 
   tsv += [
-    esc(output.scraped_at ? output.scraped_at.split('T')[0] : new Date().toISOString().split('T')[0]),
+    esc(ShopeeParser.toLocalDateString(output.scraped_at)),
     esc(output.product?.name),
     esc(output.shop?.name || '-'),
     esc(output.shop?.location || '-'),

@@ -1249,7 +1249,7 @@
     ].join(T) + N;
 
     tsv += [
-      esc(data.scraped_at ? data.scraped_at.split('T')[0] : new Date().toISOString().split('T')[0]),
+      esc(ShopeeParser.toLocalDateString(data.scraped_at)),
       esc(data.product?.name),
       esc(data.shop?.name || '-'),
       esc(data.shop?.location || '-'),
