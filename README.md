@@ -259,6 +259,8 @@ Di `chrome://extensions/` → klik tombol reload (🔄) pada extension ini.
 | Terjual/bulan kosong | Klik **⚡ Muat Info Terjual & Toko** |
 | Angka omset terasa aneh | Cek label sumber datanya — lihat [Cara Membaca Angkanya](#cara-membaca-angkanya) |
 | Banner merah "Scraping dijeda sampai HH:MM" | Shopee menolak permintaan (HTTP 403/429, error 90309999) atau mengalihkan ke halaman verifikasi. Extension berhenti total selama 30 menit supaya blokirnya tidak makin dalam. Buka Shopee secara manual, selesaikan verifikasi kalau diminta, lalu tunggu jedanya habis. **Hapus peringatan** hanya kalau Anda yakin Shopee sudah normal lagi |
+| Update batal / "file contains a virus" | Antivirus (mis. Windows Defender) memblokir salah satu file. Update lewat extension mengembalikan semua file seperti semula; `install-update.bat` menyalin sisanya lalu menyebut file yang diblokir. Cek Windows Security > Protection history |
+| Update "berhasil" tapi versinya tidak berubah | Folder yang diperbarui bukan folder yang dimuat Chrome. Lihat baris **Source** di `chrome://extensions` dan perbarui folder itu |
 | Google Sheets error | Pastikan OAuth2 sudah di-setup dan extension sudah di-reload |
 | Extension tidak aktif | Cek statusnya di `chrome://extensions/` |
 
