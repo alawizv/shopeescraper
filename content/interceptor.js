@@ -66,14 +66,72 @@
   }
 
   // ========================================
+  // Penerusan respons API ke content script
+  // ========================================
+  const ALL_API_PATTERNS = Object.values(API_PATTERNS).flat();
+
+  function isApiUrl(url) {
+    return matchesPattern(url, ALL_API_PATTERNS);
+  }
+
+  /**
+   * Laporkan respons yang ditolak Shopee: HTTP >= 400, atau HTTP 200 dengan kode
+   * `error` di body (cara Shopee menolak lewat sistem anti-fraud). Interceptor hanya
+   * meneruskan fakta; injector.js yang memutuskan apakah ini blokir.
+   */
+  function reportIfRejected(url, status, data) {
+    const error = data && typeof data === 'object' ? data.error : undefined;
+    const hasErrorCode = typeof error === 'number' && error !== 0;
+    if (status < 400 && !hasErrorCode) return;
+    sendToContentScript('api_error', {
+      url: String(url).split('?')[0],
+      status: status,
+      error: hasErrorCode ? error : null
+    });
+  }
+
+  /**
+   * Satu pintu untuk respons XHR maupun fetch pada endpoint yang kita pantau.
+   * @param {string} via - 'XHR' atau 'Fetch' (hanya untuk log)
+   * @param {number} status - HTTP status
+   * @param {object|null} data - body JSON, null bila bukan JSON
+   */
+  function dispatchApiResponse(via, url, status, data) {
+    reportIfRejected(url, status, data);
+    // Body dari respons yang ditolak tidak berisi data berguna
+    if (status >= 400 || data === null) return;
+
+    if (matchesPattern(url, API_PATTERNS.productDetail)) {
+      console.log(`[Shopee Scraper] ${via} Intercepted: Product Detail`, url);
+      sendToContentScript('product', data);
+    }
+
+    if (matchesPattern(url, API_PATTERNS.reviews)) {
+      console.log(`[Shopee Scraper] ${via} Intercepted: Reviews`, url);
+      sendToContentScript('reviews', data);
+    }
+
+    if (matchesPattern(url, API_PATTERNS.shop)) {
+      console.log(`[Shopee Scraper] ${via} Intercepted: Shop Detail`, url);
+      sendToContentScript('shop', data);
+    }
+
+    // Data pencarian (Terjual/Bulan)
+    if (matchesPattern(url, API_PATTERNS.search)) {
+      console.log(`[Shopee Scraper] ${via} Intercepted: Search Items`, url);
+      sendToContentScript('search_items', data);
+    }
+  }
+
+  // ========================================
   // Intercept XMLHttpRequest
   // ========================================
   const originalXHROpen = XMLHttpRequest.prototype.open;
   const originalXHRSend = XMLHttpRequest.prototype.send;
 
   XMLHttpRequest.prototype.open = function (method, url, ...args) {
-    // Simpan URL untuk dicek saat response diterima
-    this._interceptedUrl = url;
+    // Simpan URL untuk dicek saat response diterima (url bisa berupa objek URL)
+    this._interceptedUrl = String(url);
     return originalXHROpen.apply(this, [method, url, ...args]);
   };
 
@@ -81,36 +139,17 @@
     this.addEventListener('load', function () {
       try {
         const url = this._interceptedUrl || '';
+        if (!isApiUrl(url)) return;
 
-        // Cek apakah response ini adalah data produk
-        if (matchesPattern(url, API_PATTERNS.productDetail)) {
-          const responseData = JSON.parse(this.responseText);
-          console.log('[Shopee Scraper] XHR Intercepted: Product Detail', url);
-          sendToContentScript('product', responseData);
+        let data = null;
+        try {
+          data = JSON.parse(this.responseText);
+        } catch (e) {
+          // Bukan JSON (mis. halaman HTML penolakan); status HTTP tetap dilaporkan
         }
-
-        // Cek apakah response ini adalah data review
-        if (matchesPattern(url, API_PATTERNS.reviews)) {
-          const responseData = JSON.parse(this.responseText);
-          console.log('[Shopee Scraper] XHR Intercepted: Reviews', url);
-          sendToContentScript('reviews', responseData);
-        }
-
-        // Cek apakah response ini adalah data toko
-        if (matchesPattern(url, API_PATTERNS.shop)) {
-          const responseData = JSON.parse(this.responseText);
-          console.log('[Shopee Scraper] XHR Intercepted: Shop Detail', url);
-          sendToContentScript('shop', responseData);
-        }
-
-        // Cek apakah response ini adalah data pencarian (Terjual/Bulan)
-        if (matchesPattern(url, API_PATTERNS.search)) {
-          const responseData = JSON.parse(this.responseText);
-          console.log('[Shopee Scraper] XHR Intercepted: Search Items', url);
-          sendToContentScript('search_items', responseData);
-        }
+        dispatchApiResponse('XHR', url, this.status, data);
       } catch (e) {
-        // Abaikan error parsing — bukan response JSON
+        // Abaikan error — jangan sampai mengganggu halaman Shopee
       }
     });
 
@@ -123,42 +162,17 @@
   const originalFetch = window.fetch;
 
   window.fetch = function (input, init) {
-    const url = typeof input === 'string' ? input : (input instanceof Request ? input.url : '');
+    const url = typeof input === 'string' ? input
+      : (input instanceof Request ? input.url
+        : (input instanceof URL ? input.href : ''));
 
     return originalFetch.apply(this, arguments).then(response => {
-      // Clone response agar body tetap bisa dibaca oleh Shopee
-      const clonedResponse = response.clone();
-
-      // Cek apakah URL cocok dengan pattern produk
-      if (matchesPattern(url, API_PATTERNS.productDetail)) {
-        clonedResponse.json().then(data => {
-          console.log('[Shopee Scraper] Fetch Intercepted: Product Detail', url);
-          sendToContentScript('product', data);
-        }).catch(() => { });
-      }
-
-      // Cek apakah URL cocok dengan pattern review
-      if (matchesPattern(url, API_PATTERNS.reviews)) {
-        clonedResponse.json().then(data => {
-          console.log('[Shopee Scraper] Fetch Intercepted: Reviews', url);
-          sendToContentScript('reviews', data);
-        }).catch(() => { });
-      }
-
-      // Cek apakah URL cocok dengan pattern toko
-      if (matchesPattern(url, API_PATTERNS.shop)) {
-        clonedResponse.json().then(data => {
-          console.log('[Shopee Scraper] Fetch Intercepted: Shop Detail', url);
-          sendToContentScript('shop', data);
-        }).catch(() => { });
-      }
-
-      // Cek apakah URL cocok dengan pattern pencarian (Terjual/Bulan)
-      if (matchesPattern(url, API_PATTERNS.search)) {
-        clonedResponse.json().then(data => {
-          console.log('[Shopee Scraper] Fetch Intercepted: Search Items', url);
-          sendToContentScript('search_items', data);
-        }).catch(() => { });
+      // Hanya endpoint yang kita pantau yang di-clone; respons lain dibiarkan apa adanya
+      if (isApiUrl(url)) {
+        // Clone response agar body tetap bisa dibaca oleh Shopee
+        response.clone().json()
+          .catch(() => null)
+          .then(data => dispatchApiResponse('Fetch', url, response.status, data));
       }
 
       return response;
