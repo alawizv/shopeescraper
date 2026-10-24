@@ -65,9 +65,7 @@ function getCurrencySymbol(urlOrHost) {
 
 function formatRupiah(num, urlOrHost) {
   if (num === null || num === undefined) return '-';
-  const sym = getCurrencySymbol(urlOrHost);
-  const n = Number(num) || 0;
-  return sym + ' ' + n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return ShopeeFormat.formatMoney(num, getCurrencySymbol(urlOrHost));
 }
 
 function escapeHTML(str) {

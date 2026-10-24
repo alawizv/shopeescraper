@@ -123,7 +123,7 @@
       try {
         await chrome.scripting.executeScript({
           target: { tabId: tab.id },
-          files: ['utils/db.js', 'utils/parser.js', 'content/injector.js', 'content/panel.js']
+          files: ['utils/db.js', 'utils/format.js', 'utils/parser.js', 'content/injector.js', 'content/panel.js']
         });
         showLoading('Menyambung ulang...');
         
@@ -1183,8 +1183,7 @@
 
   function formatRupiah(num) {
     if (!num && num !== 0) return '-';
-    const sym = getCurrencySymbol(currentData?.url || '');
-    return sym + ' ' + num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return ShopeeFormat.formatMoney(num, getCurrencySymbol(currentData?.url || ''));
   }
 
   function formatNumber(num) {

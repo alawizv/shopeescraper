@@ -26,6 +26,17 @@ test('re-inject popup menyuntik semua skrip yang dipasang manifest', () => {
   assert.deepEqual(fromPopup, fromManifest);
 });
 
+test('popup.html memuat semua skrip utils manifest sebelum popup.js', () => {
+  const html = read('popup/popup.html');
+  const scripts = [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1].replace(/^\.\.\//, ''));
+  const popupAt = scripts.indexOf('popup.js');
+  assert.ok(popupAt > 0, 'popup.js harus ada di popup.html');
+  for (const dep of manifestContentScripts().filter((f) => f.startsWith('utils/'))) {
+    const at = scripts.indexOf(dep);
+    assert.ok(at >= 0 && at < popupAt, `${dep} harus dimuat popup.html sebelum popup.js`);
+  }
+});
+
 test('re-inject popup memuat dependensi sebelum panel.js', () => {
   const files = popupReinjectFiles();
   const panelAt = files.indexOf('content/panel.js');

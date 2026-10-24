@@ -62,7 +62,7 @@
         "https://*.shopee.com.co/*",
         "https://*.shopee.cl/*"
       ],
-      "js": ["utils/db.js", "utils/parser.js", "content/panel.js"],
+      "js": ["utils/db.js", "utils/format.js", "utils/parser.js", "content/panel.js"],
       "run_at": "document_end"
     }
   ],
