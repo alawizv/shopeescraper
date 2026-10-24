@@ -49,6 +49,54 @@
     return Math.round(baseMs * (1 - spread / 2 + Math.random() * spread));
   }
 
+  // ========================================
+  // Deteksi blokir anti-bot
+  // ========================================
+  // Catatan blokir aktif. Disimpan di chrome.storage.local sehingga bertahan walau Shopee
+  // mengalihkan tab ke /verify/ dan berlaku untuk semua tab Shopee (lihat utils/antibot.js).
+  let blockRecord = null;
+
+  function isBlocked() {
+    return !!ShopeeAntiBot.activeBlock(blockRecord);
+  }
+
+  // Sinyal blokir terdeteksi: hentikan SEMUA scraping dan catat masa jeda. Mengulang request
+  // saat sesi sudah ditandai bot hanya memperdalam blokirnya.
+  function handleBlock(reason) {
+    if (isBlocked()) return;
+    blockRecord = ShopeeAntiBot.createBlock(reason);
+    window.CS_SHOPEE_STOP_FLAG = true; // dibaca loop pagination dan direct API
+    console.warn(`[Shopee Scraper] ⛔ Blokir Shopee terdeteksi (${reason}). Semua scraping dihentikan.`);
+    try {
+      chrome.storage.local.set({ [ShopeeAntiBot.STORAGE_KEY]: blockRecord }, () => {
+        void chrome.runtime.lastError;
+      });
+    } catch (e) { /* extension context invalidated */ }
+  }
+
+  // true bila respons ini sinyal blokir (sudah dicatat dan scraping dihentikan)
+  function detectBlock(status, data) {
+    const reason = ShopeeAntiBot.classify({ status, error: data?.error });
+    if (!reason) return false;
+    handleBlock(reason);
+    return true;
+  }
+
+  // Ambil catatan dari sesi/tab lain dan ikuti perubahannya (mis. user menghapus peringatan)
+  try {
+    chrome.storage.local.get(ShopeeAntiBot.STORAGE_KEY, (res) => {
+      if (res && res[ShopeeAntiBot.STORAGE_KEY]) blockRecord = res[ShopeeAntiBot.STORAGE_KEY];
+    });
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && changes[ShopeeAntiBot.STORAGE_KEY]) {
+        blockRecord = changes[ShopeeAntiBot.STORAGE_KEY].newValue || null;
+      }
+    });
+  } catch (e) { /* extension context invalidated */ }
+
+  // Dialihkan ke halaman tantangan Shopee = blokir yang sudah terjadi
+  if (ShopeeAntiBot.isVerifyPath(window.location.pathname)) handleBlock('redirect_verify');
+
   // Helper deduplikasi ulasan universal (anti double-read/double-count)
   function getReviewDedupeKey(r) {
     if (!r) return '';
@@ -129,6 +177,11 @@
         // Ekstrak data "Terjual/Bulan" dari hasil pencarian Shopee
         extractMonthlySoldFromSearch(data);
         processBulkSearchItems(data);
+        break;
+
+      case 'api_error':
+        // Interceptor hanya meneruskan fakta; di sini diputuskan apakah ini blokir
+        detectBlock(data.status, { error: data.error });
         break;
     }
   });
@@ -1049,7 +1102,8 @@
   async function fetchProductManual() {
     const ids = extractIdsFromURL();
     if (!ids) throw new Error('Tidak bisa mengekstrak ID produk');
-    
+    if (isBlocked()) throw new Error('Sesi sedang dijeda karena diblokir Shopee');
+
     // Shopee get_pc endpoint biasa
     const origin = window.location.origin || 'https://shopee.co.id';
     const apiUrl = `${origin}/api/v4/pdp/get_pc?item_id=${ids.itemId}&shop_id=${ids.shopId}`;
@@ -1061,9 +1115,13 @@
       }
     });
 
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) {
+      detectBlock(response.status);
+      throw new Error(`HTTP ${response.status}`);
+    }
     const data = await response.json();
-    
+    detectBlock(response.status, data);
+
     // Shopee sering memalsukan HTTP 200 walaupun sebenarnya diblokir bot (error 403 / data null)
     if (data.error || !data.data) {
         throw new Error(`Shopee API Error: ${data.error || 'Data kosong'}`);
@@ -1150,6 +1208,13 @@
     }
 
     if (message.action === 'FETCH_REVIEWS') {
+      // Rantai tombol Scrape di panel tetap menembakkan langkah berikutnya walau sudah diblokir
+      if (isBlocked()) {
+        console.warn('[Shopee Scraper] FETCH_REVIEWS ditolak: sesi sedang dijeda karena diblokir Shopee.');
+        sendResponse({ status: 'blocked' });
+        return false;
+      }
+
       // ⚡ PERBAIKAN KRITIS: Balas SEGERA agar channel Chrome tidak timeout (>30 detik)
       // Fetch review berlanjut di background, panel akan auto-update via storage.onChanged
       sendResponse({ status: 'processing' });
@@ -1167,7 +1232,8 @@
         // Simpan ke state dan storage — panel akan auto-refresh via storage.onChanged
         interceptedData.allScrapedReviews = reviews;
         interceptedData.reviews = [{ data: { ratings: reviews } }];
-        interceptedData.fetchStatus = `done:${reviews.length}`;
+        // Terblokir di tengah jalan = hasil sebagian, jangan ditandai selesai
+        interceptedData.fetchStatus = `${isBlocked() ? 'stopped' : 'done'}:${reviews.length}`;
         saveDataToStorage();
       }).catch(err => {
         console.error('[Shopee Scraper V3] FETCH_REVIEWS gagal:', err);
@@ -1179,6 +1245,10 @@
     }
 
     if (message.action === 'CLICK_REVIEW_TABS') {
+      if (isBlocked()) {
+        sendResponse({ status: 'blocked' });
+        return false;
+      }
       sendResponse({ status: 'clicking' });
       
       clickReviewFilterTabs().then(result => {
@@ -1301,9 +1371,10 @@
     // Step 3: Klik setiap tab secara berurutan
     let clicked = 0;
     for (let i = 0; i < allFilterButtons.length; i++) {
+      if (isBlocked()) break;
       const btn = allFilterButtons[i];
       const label = (btn.textContent || '').trim().substring(0, 30);
-      
+
       try {
         btn.click();
         clicked++;
@@ -1317,7 +1388,7 @@
     }
     
     // Step 4: Kembali ke tab "Semua" di akhir
-    if (allFilterButtons.length > 0) {
+    if (allFilterButtons.length > 0 && !isBlocked()) {
       try {
         allFilterButtons[0].click();
         console.log('[Shopee Scraper] Kembali ke tab "Semua"');
@@ -1349,6 +1420,7 @@
   async function fetchShopDetail() {
     const ids = extractIdsFromURL();
     if (!ids) throw new Error('Tidak bisa mengekstrak shop_id dari URL');
+    if (isBlocked()) throw new Error('Sesi sedang dijeda karena diblokir Shopee');
 
     // Coba ambil shop_id dari product yang sudah discrape jika ada
     let shopId = ids.shopId;
@@ -1371,9 +1443,13 @@
       }
     });
 
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) {
+      detectBlock(response.status);
+      throw new Error(`HTTP ${response.status}`);
+    }
 
     const data = await response.json();
+    if (detectBlock(response.status, data)) throw new Error('Sesi diblokir Shopee');
     console.log('[Shopee Scraper] Data toko berhasil di-fetch:', data);
     return data;
   }
@@ -1396,6 +1472,11 @@
     const ids = extractIdsFromURL();
     if (!ids) return;
 
+    if (isBlocked()) {
+      console.log('[Shopee Scraper] Auto-fetch dilewati: sesi sedang dijeda karena diblokir Shopee.');
+      return;
+    }
+
     console.log('%c[Shopee Scraper] 🔄 Auto-fetch reviews dimulai (direct API)...', 'background: teal; color: white;');
 
     const allReviews = [];
@@ -1403,8 +1484,6 @@
     let offset = 0;
     const limit = 6;
     const maxPages = 50; // Max 300 review
-    let retryCount = 0;
-    const maxRetries = 3;
     let page = 0;
     let lastProgressSave = 0;
 
@@ -1414,6 +1493,7 @@
 
     try {
       while (page < maxPages) {
+        if (isBlocked()) break;
         const origin = window.location.origin || 'https://shopee.co.id';
         const apiUrl = `${origin}/api/v2/item/get_ratings?filter=0&flag=1&itemid=${ids.itemId}&limit=${limit}&offset=${offset}&shopid=${ids.shopId}&type=0`;
         const response = await fetch(apiUrl, {
@@ -1426,27 +1506,13 @@
         });
 
         if (!response.ok) {
-          // 403 = sudah ditandai bot oleh Shopee: berhenti total, mengulang hanya memperdalam blokir
-          if (response.status === 403) {
-            console.warn('[Shopee Scraper] ⛔ Auto-fetch: HTTP 403, menghentikan.');
-            break;
-          }
-          if (response.status === 429) {
-            retryCount++;
-            const waitTime = Math.min(3000 * retryCount, 15000);
-            console.warn(`[Shopee Scraper] ⚠️ Auto-fetch HTTP ${response.status}. Retry ${retryCount}/${maxRetries}`);
-            await new Promise(r => setTimeout(r, waitTime));
-            if (retryCount > maxRetries) {
-              console.warn('[Shopee Scraper] ⛔ Auto-fetch: API diblokir, menghentikan.');
-              break;
-            }
-            continue;
-          }
+          // 403 / 429 = sudah ditandai bot: berhenti total, mengulang hanya memperdalam blokir
+          detectBlock(response.status);
           break;
         }
 
-        retryCount = 0;
         const data = await response.json();
+        if (detectBlock(response.status, data)) break; // HTTP 200 palsu berisi error anti-fraud
         const ratings = data?.data?.ratings || [];
         if (ratings.length === 0) break;
 
@@ -1481,11 +1547,11 @@
     if (allReviews.length > 0) {
       console.log(`%c[Shopee Scraper] ✅ Auto-fetch selesai! ${allReviews.length} review`, 'background: green; color: white; font-size: 14px;');
       interceptedData.reviews = [{ data: { ratings: allReviews } }];
-      interceptedData.fetchStatus = `done:${allReviews.length}`;
+      interceptedData.fetchStatus = `${isBlocked() ? 'stopped' : 'done'}:${allReviews.length}`;
       saveDataToStorage();
     } else {
       console.log('[Shopee Scraper] Auto-fetch: tidak ada review yang didapat.');
-      interceptedData.fetchStatus = 'done:0';
+      interceptedData.fetchStatus = `${isBlocked() ? 'stopped' : 'done'}:0`;
       saveDataToStorage();
     }
   }
@@ -1627,6 +1693,11 @@
 
         // Loop klik tombol "next page" dan tunggu interceptor menangkap hasilnya
         while (paginationRounds < MAX_PAGINATION_ROUNDS && paginationAttempts < MAX_PAGINATION_ATTEMPTS) {
+          // Blokir bisa datang saat jeda antar halaman; jangan mengklik lagi sesudahnya
+          if (isBlocked()) {
+            console.warn('[Shopee Scraper V3] ⛔ Diblokir Shopee, pagination dihentikan.');
+            break;
+          }
           paginationAttempts++; // selalu naik — mencegah loop tak berujung saat klik berhasil tapi tidak ada data
           let clicked = false;
           let pagedByNextBtn = false; // true jika putaran ini mengklik tombol next (bukan pindah tab filter)
@@ -1958,13 +2029,13 @@
     }
 
     // === Tahap 1: Jika pagination tidak berhasil, coba direct API dengan limit konservatif ===
-    if (allReviews.length < 10) {
+    // (dilewati bila pagination berakhir karena blokir: direct API tanpa tanda tangan Shopee
+    // akan ditolak lagi dan hanya memperdalam blokir)
+    if (allReviews.length < 10 && !isBlocked()) {
       console.log('%c[Shopee Scraper V3] 🚀 Pagination gagal, mencoba direct API (limit=6)...', 'background: orange; color: black; font-weight: bold;');
       try {
         let offset = 0;
         const limit = 6; // Konservatif — sama dengan yang dipakai Shopee native
-        let retryCount = 0;
-        const maxRetries = 3;
         let lastProgressSaveApi = 0;
 
         while (true) {
@@ -1985,24 +2056,13 @@
           });
 
           if (!response.ok) {
-            // 403 = sudah ditandai bot oleh Shopee: berhenti total, mengulang hanya memperdalam blokir
-            if (response.status === 403) {
-              console.warn('[Shopee Scraper V3] ⛔ HTTP 403, API diblokir. Menghentikan direct API.');
-              break;
-            }
-            if (response.status === 429) {
-              retryCount++;
-              const waitTime = Math.min(3000 * retryCount, 15000);
-              console.warn(`[Shopee Scraper V3] ⚠️ HTTP ${response.status}. Retry ${retryCount}/${maxRetries}, tunggu ${waitTime/1000}s...`);
-              await new Promise(r => setTimeout(r, waitTime));
-              if (retryCount > maxRetries) { console.warn('[Shopee Scraper V3] ⛔ API tetap diblokir.'); break; }
-              continue;
-            }
+            // 403 / 429 = sudah ditandai bot: berhenti total, mengulang hanya memperdalam blokir
+            if (detectBlock(response.status)) break;
             throw new Error(`HTTP ${response.status}`);
           }
 
-          retryCount = 0;
           const data = await response.json();
+          if (detectBlock(response.status, data)) break; // HTTP 200 palsu berisi error anti-fraud
           const ratings = data?.data?.ratings || [];
           if (ratings.length === 0) break;
 
@@ -2143,6 +2203,8 @@
     setInterval(() => {
       if (window.location.href !== lastUrl) {
          lastUrl = window.location.href;
+         // Shopee kadang menampilkan halaman tantangan lewat navigasi SPA tanpa memuat ulang
+         if (ShopeeAntiBot.isVerifyPath(window.location.pathname)) handleBlock('redirect_verify');
          bulkSearchProductsMap.clear();
          if (checkIsProductPage()) {
             console.log('[Shopee Scraper] Navigasi SPA ke PDP terdeteksi, restart intercept/fallback...');
