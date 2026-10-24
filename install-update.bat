@@ -74,16 +74,23 @@ rem    berjalan; kalau berkasnya berubah di tengah jalan, eksekusi bisa
 rem    melompat ke posisi acak. Di kasus lain (instalasi baru, atau skrip
 rem    dijalankan dari Desktop) berkas ini justru HARUS ikut tersalin,
 rem    supaya nanti berada di dalam folder extension.
+rem -- Penyalinan memakai robocopy, bukan xcopy: kalau satu file gagal ditulis (mis.
+rem    antivirus memblokirnya), xcopy berhenti di tengah jalan dan meninggalkan folder
+rem    setengah ter-update (manifest baru, file baru belum ada). robocopy menyalin
+rem    sisanya lalu melaporkan yang gagal lewat kode keluar >= 8.
+rem    Folder tests, dev, dan .github hanya untuk pengembangan, tidak perlu disalin.
+set "COPY_FAILED="
 if /i "%INSTALL_DIR%"=="%SELF_DIR%" goto COPY_SKIP_SELF
 
-xcopy "%TMP_DIR%\shopeescraper-main\*" "%INSTALL_DIR%\" /E /I /Y /Q >nul
-if errorlevel 1 goto ERR_COPY
-goto COPY_DONE
+robocopy "%TMP_DIR%\shopeescraper-main" "%INSTALL_DIR%" /E /R:0 /W:0 /NFL /NDL /NJH /NJS /NP /XD tests dev .github /LOG:"%TMP_DIR%\copy.log" >nul
+goto COPY_CHECK
 
 :COPY_SKIP_SELF
-echo install-update.bat> "%TMP_DIR%\skip.txt"
-xcopy "%TMP_DIR%\shopeescraper-main\*" "%INSTALL_DIR%\" /E /I /Y /Q /EXCLUDE:%TMP_DIR%\skip.txt >nul
-if errorlevel 1 goto ERR_COPY
+robocopy "%TMP_DIR%\shopeescraper-main" "%INSTALL_DIR%" /E /R:0 /W:0 /NFL /NDL /NJH /NJS /NP /XD tests dev .github /XF install-update.bat /LOG:"%TMP_DIR%\copy.log" >nul
+
+:COPY_CHECK
+if errorlevel 16 goto ERR_COPY
+if errorlevel 8 set "COPY_FAILED=1"
 
 :COPY_DONE
 
@@ -94,10 +101,39 @@ if exist "%TMP_DIR%\clientid.txt" (
     echo.
 )
 
+if defined COPY_FAILED goto DONE_PARTIAL
+
 rd /s /q "%TMP_DIR%" >nul 2>&1
 
 if "%MODE%"=="UPDATE" goto DONE_UPDATE
 goto DONE_INSTALL
+
+
+:DONE_PARTIAL
+color 0E
+echo.
+echo ===============================================
+echo    SEBAGIAN FILE TIDAK BISA DISALIN
+echo ===============================================
+echo.
+echo  Daftar file yang gagal:
+echo.
+type "%TMP_DIR%\copy.log"
+echo.
+echo  File lainnya sudah terpasang, jadi extension tetap bisa dipakai.
+echo  Hanya bagian yang memakai file di atas yang mungkin tidak lengkap.
+echo.
+echo  Kalau pesannya menyebut "virus" atau "unwanted software":
+echo  antivirus (mis. Windows Defender) memblokir file itu. Buka
+echo  Windows Security ^> Virus ^& threat protection ^> Protection
+echo  history untuk melihat file apa yang diblokir.
+echo.
+echo  Kalau pesannya menyebut file sedang dipakai: tutup Chrome
+echo  sepenuhnya lalu jalankan file ini lagi.
+echo.
+rd /s /q "%TMP_DIR%" >nul 2>&1
+pause
+exit /b 2
 
 
 :DONE_UPDATE
@@ -190,7 +226,8 @@ echo ===============================================
 echo    GAGAL MENYALIN FILE
 echo ===============================================
 echo.
-echo  Biasanya karena folder sedang dipakai program lain.
+echo  Penyalin file (robocopy) tidak bisa berjalan atau folder
+echo  tujuannya tidak bisa diakses.
 echo.
 echo  Coba: tutup Chrome sepenuhnya, lalu jalankan file ini lagi.
 echo.
