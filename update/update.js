@@ -99,33 +99,40 @@
   /**
    * Chrome membaca file extension langsung dari disk, jadi file yang baru dibuat di
    * folder yang BENAR akan terbaca lewat chrome.runtime.getURL(). Ini mendeteksi kasus
-   * "update berhasil tapi versi tidak berubah" karena user memilih folder salinan lain.
+   * "update berhasil tapi versi tidak berubah" karena folder yang dipilih hanya salinan
+   * lain (mis. folder lama), bukan folder yang dimuat Chrome.
+   *
+   * @returns {Promise<'same'|'different'|'unknown'>} 'unknown' = pengecekan sendiri gagal
    */
-  async function looksLikeLoadedFolder(dir) {
+  async function checkLoadedFolder(dir) {
     const name = `update-probe-${Date.now()}.txt`;
+    let wrote = false;
     try {
       const writable = await (await dir.getFileHandle(name, { create: true })).createWritable();
       await writable.write('probe');
       await writable.close();
+      wrote = true;
       const resp = await fetch(chrome.runtime.getURL(name), { cache: 'no-store' });
-      return resp.ok;
+      return resp.ok ? 'same' : 'different';
     } catch (e) {
-      return false;
+      // Sudah tertulis tapi tidak terbaca Chrome = folder lain; gagal menulis = tidak bisa dipastikan
+      return wrote ? 'different' : 'unknown';
     } finally {
       try { await dir.removeEntry(name); } catch (e) { /* sudah tidak ada */ }
     }
   }
 
+  const NOT_LOADED_FOLDER_HELP =
+    'Folder ini BUKAN folder yang sedang dimuat Chrome. File akan terpasang di sini, ' +
+    'tetapi extension yang Anda pakai tidak berubah.\n\n' +
+    'Klik "Lihat lokasi folder di Chrome", lihat baris "Source" / "Sumber", lalu pilih folder itu.';
+
   async function chooseFolder() {
     const dir = await window.showDirectoryPicker({ id: 'shopee-scraper-extension', mode: 'readwrite' });
     await ShopeeUpdater.assertExtensionDir(dir, EXTENSION_NAME);
 
-    if (!(await looksLikeLoadedFolder(dir))) {
-      const proceed = confirm(
-        'Folder ini sepertinya BUKAN folder yang sedang dimuat Chrome, jadi update mungkin tidak akan terlihat.\n\n' +
-        'Cek folder yang benar lewat tombol "Lihat lokasi folder di Chrome" (baris Source).\n\n' +
-        'Tetap lanjutkan dengan folder ini?'
-      );
+    if ((await checkLoadedFolder(dir)) === 'different') {
+      const proceed = confirm(NOT_LOADED_FOLDER_HELP + '\n\nTetap lanjutkan dengan folder ini?');
       if (!proceed) throw new DOMException('Dibatalkan', 'AbortError');
     }
 
@@ -146,6 +153,10 @@
           throw new Error('Izin menulis ke folder ditolak. Klik Update lagi, lalu pilih "Izinkan".');
         }
         await ShopeeUpdater.assertExtensionDir(dir, EXTENSION_NAME);
+        // Folder tersimpan dari sesi lalu bisa saja bukan folder yang dimuat Chrome
+        if ((await checkLoadedFolder(dir)) === 'different') {
+          throw new Error(NOT_LOADED_FOLDER_HELP.replace('\n\n', ' ') + ' Lalu klik "Ganti folder".');
+        }
       } else {
         dir = await chooseFolder();
       }
@@ -157,7 +168,7 @@
       });
 
       setStatus(
-        `✅ File v${result.version} sudah terpasang (${result.fileCount} file). ` +
+        `✅ File v${result.version} sudah terpasang (${result.written} file diperbarui, ${result.unchanged} tidak berubah). ` +
         'Klik tombol di bawah untuk memakai versi barunya, lalu refresh tab Shopee yang sedang terbuka.',
         'ok'
       );
