@@ -761,6 +761,14 @@ function createPanel() {
         </div>
       </div>
 
+      <!-- Banner Blokir Shopee -->
+      <div id="panelBlockBanner" style="display:none; margin: 8px 12px 0 12px; padding:8px 10px; background:#fff1f0; border:1px solid #ffa39e; border-radius:8px; font-size:11px; color:#a8071a; line-height:1.4;">
+        <div id="panelBlockText" style="font-weight:700;"></div>
+        <div style="margin-top:5px;">
+          <button id="btnPanelClearBlock" style="background:#fff; color:#a8071a; border:1px solid #ffa39e; padding:3px 8px; border-radius:4px; font-size:10px; font-weight:700; cursor:pointer;" title="Hanya jika Anda yakin Shopee sudah bisa dibuka normal">Hapus peringatan</button>
+        </div>
+      </div>
+
       <div class="body" id="bodyActive">
         <!-- Aksi -->
         <div class="actions">
@@ -1014,6 +1022,13 @@ function createPanel() {
 async function getScraperData() {
   return new Promise(resolve => {
     chrome.storage.local.get('shopeeScraperData', (res) => resolve(res.shopeeScraperData || null));
+  });
+}
+
+// Catatan blokir Shopee (ditulis injector.js, lihat utils/antibot.js)
+function getBlockRecord() {
+  return new Promise(resolve => {
+    chrome.storage.local.get(ShopeeAntiBot.STORAGE_KEY, (res) => resolve(res?.[ShopeeAntiBot.STORAGE_KEY] || null));
   });
 }
 
@@ -1699,13 +1714,17 @@ async function refreshFromStorage(shadow, savedsource) {
     sampleWithTextEl.textContent = Number(filteredCount).toLocaleString('id-ID');
   }
 
-  // Badge logic & Button State: prioritas fetchStatus > dataSource
+  // Badge logic & Button State: prioritas blokir > fetchStatus > dataSource
   const fetchStatus = saved.fetchStatus || null;
   const src = saved.dataSource;
   const btnScrape = shadow.getElementById('btnScrape');
   const btnStop = shadow.getElementById('btnStop');
 
-  if (fetchStatus && fetchStatus.startsWith('loading:')) {
+  if (ShopeeAntiBot.activeBlock(await getBlockRecord())) {
+    setBadge(shadow, '⛔ Diblokir Shopee', 'error');
+    if (btnStop) btnStop.style.display = 'none';
+    if (btnScrape) btnScrape.disabled = false;
+  } else if (fetchStatus && fetchStatus.startsWith('loading:')) {
     const count = fetchStatus.split(':')[1] || '0';
     setBadge(shadow, `📥 Ulasan: ${count}...`, 'loading');
     if (btnStop) btnStop.style.display = 'inline-block';
@@ -1819,6 +1838,41 @@ async function mountPanel() {
     }
   });
 
+  // ── Peringatan blokir Shopee ──
+  const blockBanner = shadow.getElementById('panelBlockBanner');
+  const blockTextEl = shadow.getElementById('panelBlockText');
+  const btnClearBlock = shadow.getElementById('btnPanelClearBlock');
+  let blockExpiryTimer = null;
+
+  function renderPanelBlock(record) {
+    clearTimeout(blockExpiryTimer);
+    const active = ShopeeAntiBot.activeBlock(record);
+    if (blockBanner) blockBanner.style.display = active ? 'block' : 'none';
+    if (!active) return;
+    if (blockTextEl) blockTextEl.textContent = ShopeeAntiBot.describe(active).text;
+    // Sembunyikan sendiri begitu masa jeda habis
+    blockExpiryTimer = setTimeout(() => {
+      renderPanelBlock(record);
+      refreshFromStorage(shadow);
+    }, active.until - Date.now() + 500);
+  }
+
+  getBlockRecord().then(renderPanelBlock);
+
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes[ShopeeAntiBot.STORAGE_KEY]) {
+      renderPanelBlock(changes[ShopeeAntiBot.STORAGE_KEY].newValue);
+      refreshFromStorage(shadow);
+    }
+  });
+
+  if (btnClearBlock) {
+    btnClearBlock.addEventListener('click', () => {
+      const ok = confirm('Shopee baru saja memblokir sesi ini. Melanjutkan scraping sebelum jeda selesai bisa memperpanjang blokir.\n\nTetap hapus peringatan?');
+      if (ok) chrome.storage.local.remove(ShopeeAntiBot.STORAGE_KEY);
+    });
+  }
+
   // Klik badge versi untuk manual cek update
   if (verBadge) {
     verBadge.addEventListener('click', async () => {
@@ -1921,6 +1975,14 @@ async function mountPanel() {
   }
 
   btnScrape.addEventListener('click', async () => {
+    // Jangan memulai rantai scraping saat sesi sedang dijeda karena diblokir Shopee
+    const blockRecord = await getBlockRecord();
+    if (ShopeeAntiBot.activeBlock(blockRecord)) {
+      renderPanelBlock(blockRecord);
+      setBadge(shadow, '⛔ Diblokir Shopee', 'error');
+      return;
+    }
+
     btnScrape.disabled = true;
     btnScrape.style.display = 'none';
     btnStop.style.display = 'inline-block';

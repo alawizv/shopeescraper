@@ -766,6 +766,32 @@ body {
   background: rgba(255,255,255,.38);
 }
 
+/* === Block Banner (Shopee memblokir sesi) === */
+.block-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  background: #fff1f0;
+  border-bottom: 1px solid #ffa39e;
+  color: #a8071a;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.block-banner-btn {
+  background: #fff;
+  color: #a8071a;
+  border: 1px solid #ffa39e;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 /* === Popup Tabs === */
 .popup-tabs {
   display: flex;

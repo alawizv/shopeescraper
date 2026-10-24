@@ -95,6 +95,7 @@
 
     // Cek apakah ada update yang belum dijalankan
     checkUpdateBanner();
+    checkBlockBanner();
 
     setupEventListeners();
     updatePopupHistoryCount();
@@ -189,6 +190,14 @@
     elements.btnScrape.addEventListener('click', async () => {
       const tab = await getActiveTab();
       if (!tab) return;
+
+      // Jangan memulai scraping saat sesi sedang dijeda karena diblokir Shopee
+      const blockRecord = await getBlockRecord();
+      if (ShopeeAntiBot.activeBlock(blockRecord)) {
+        renderBlockBanner(blockRecord);
+        setStatus('error', 'Diblokir Shopee');
+        return;
+      }
 
       showLoading('Scraping ulang...');
       elements.btnScrape.disabled = true;
@@ -1110,6 +1119,41 @@
     if (!banner) return;
     if (text) text.textContent = `🎉 Update v${updateInfo.remoteVersion} tersedia! ${updateInfo.changelog || ''}`;
     banner.classList.remove('d-none');
+  }
+
+  // ── Peringatan blokir Shopee ──
+  // Catatan ditulis injector.js (lihat utils/antibot.js); berlaku untuk semua tab Shopee.
+  function getBlockRecord() {
+    return new Promise(resolve => {
+      chrome.storage.local.get(ShopeeAntiBot.STORAGE_KEY, (res) => resolve(res?.[ShopeeAntiBot.STORAGE_KEY] || null));
+    });
+  }
+
+  function renderBlockBanner(record) {
+    const banner = document.getElementById('block-banner');
+    const text = document.getElementById('block-banner-text');
+    if (!banner) return;
+    const active = ShopeeAntiBot.activeBlock(record);
+    banner.classList.toggle('d-none', !active);
+    if (active && text) text.textContent = ShopeeAntiBot.describe(active).text;
+  }
+
+  function checkBlockBanner() {
+    getBlockRecord().then(renderBlockBanner);
+  }
+
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes[ShopeeAntiBot.STORAGE_KEY]) {
+      renderBlockBanner(changes[ShopeeAntiBot.STORAGE_KEY].newValue);
+    }
+  });
+
+  const btnClearBlock = document.getElementById('btn-popup-clear-block');
+  if (btnClearBlock) {
+    btnClearBlock.addEventListener('click', () => {
+      const ok = confirm('Shopee baru saja memblokir sesi ini. Melanjutkan scraping sebelum jeda selesai bisa memperpanjang blokir.\n\nTetap hapus peringatan?');
+      if (ok) chrome.storage.local.remove(ShopeeAntiBot.STORAGE_KEY);
+    });
   }
 
   // Dengarkan pesan live dari service worker (jika popup terbuka tepat saat cek update)
