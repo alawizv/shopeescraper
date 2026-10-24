@@ -8,6 +8,14 @@
  * - Menggunakan Shadow DOM agar CSS tidak bentrok dengan Shopee
  */
 
+// Guard anti double-inject, sama seperti injector.js. popup.js dapat menyuntik ulang
+// file ini via chrome.scripting.executeScript; tanpa penjaga ini deklarasi `let` di
+// level atas melempar SyntaxError dan listener storage + interval SPA terdaftar dua kali.
+// Isi file sengaja tidak diindentasi supaya diff-nya tetap kecil.
+(function () {
+if (window.__SHOPEE_SCRAPER_PANEL_READY__) return;
+window.__SHOPEE_SCRAPER_PANEL_READY__ = true;
+
 /** Cek URL halaman produk Shopee */
 function isShopeeProductPage(url) {
   return /shopee\.[a-z.]+\/.+-i\.\d+\.\d+/.test(url || location.href) || /shopee\.[a-z.]+\/product\/\d+\/\d+/.test(url || location.href);
@@ -2265,4 +2273,6 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   }, 1000);
 
   syncPanelWithUrl();
+})();
+
 })();
