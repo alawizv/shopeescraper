@@ -37,6 +37,24 @@ test('groupThousands: string angka dari API tetap diformat', () => {
   assert.equal(ShopeeFormat.groupThousands('1500000'), '1.500.000');
 });
 
+test('escapeHTML: karakter khusus HTML di-escape termasuk kutip', () => {
+  assert.equal(ShopeeFormat.escapeHTML(`<b>"A" & 'B'</b>`), '&lt;b&gt;&quot;A&quot; &amp; &#39;B&#39;&lt;/b&gt;');
+});
+
+test('escapeHTML: nama produk berkutip tidak memutus atribut title', () => {
+  const name = 'Kaos "Premium" onmouseover="alert(1)"';
+  const html = `<div title="${ShopeeFormat.escapeHTML(name)}"></div>`;
+  assert.equal(html.match(/"/g).length, 2, 'hanya dua kutip pembuka/penutup atribut yang tersisa');
+  assert.ok(!html.includes('" onmouseover='));
+});
+
+test('escapeHTML: tanda & hanya di-escape sekali, null/undefined jadi kosong, angka jadi teks', () => {
+  assert.equal(ShopeeFormat.escapeHTML('a&amp;b'), 'a&amp;amp;b');
+  assert.equal(ShopeeFormat.escapeHTML(null), '');
+  assert.equal(ShopeeFormat.escapeHTML(undefined), '');
+  assert.equal(ShopeeFormat.escapeHTML(0), '0');
+});
+
 test('formatMoney: Rupiah dibulatkan tanpa desimal', () => {
   assert.equal(ShopeeFormat.formatMoney(12345.5, 'Rp'), 'Rp 12.346');
   assert.equal(ShopeeFormat.formatMoney(0, 'Rp'), 'Rp 0');

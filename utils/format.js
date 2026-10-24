@@ -24,6 +24,17 @@ var ShopeeFormat = (typeof ShopeeFormat !== 'undefined' && ShopeeFormat) ? Shope
   },
 
   /**
+   * Escape teks untuk disisipkan ke innerHTML, termasuk di dalam atribut ("...").
+   * Cara div.textContent -> innerHTML tidak meng-escape tanda kutip, sehingga nama
+   * produk berisi " memutus title="..." dan bisa menyuntik atribut lain.
+   * null/undefined menjadi string kosong.
+   */
+  escapeHTML(str) {
+    const entities = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    return String(str ?? '').replace(/[&<>"']/g, (ch) => entities[ch]);
+  },
+
+  /**
    * Nominal uang dengan simbol mata uang, mis. "Rp 1.234.567".
    * Rupiah dan Dong tidak punya satuan sen sehingga selalu dibulatkan;
    * mata uang lain tampil sampai 2 desimal bila memang berpecahan.

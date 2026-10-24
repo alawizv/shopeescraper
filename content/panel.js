@@ -69,9 +69,7 @@ function formatRupiah(num, urlOrHost) {
 }
 
 function escapeHTML(str) {
-  const div = document.createElement('div');
-  div.textContent = str ?? '';
-  return div.innerHTML;
+  return ShopeeFormat.escapeHTML(str);
 }
 
 function buildCSV(output) {
